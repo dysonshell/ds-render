@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "description": "render module for dysonshell",
   "main": "index.js",
+  "files": [
+    "index.js"
+  ],
   "scripts": {
     "test": "tape"
   },
@@ -14,5 +17,12 @@
     "render"
   ],
   "author": "undoZen <opensource@undozen.com>",
-  "license": "private"
+  "license": "private",
+  "peerDependencies": {
+    "lodash-node": "^2.4.1",
+    "ractive": "^0.6.1"
+  },
+  "devDependencies": {
+    "tape": "^3.0.3"
+  }
 }
