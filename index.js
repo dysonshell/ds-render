@@ -30,7 +30,7 @@ function getPartials(viewsRoot, absoluteViewPath) { //TODO: production 优化，
         });
     var partials = zipObject(partialPairs);
     var index, componentViewsRoot;
-    if ((index = absoluteViewPath.indexOf('assets/components/')) > -1) {
+    if ((index = absoluteViewPath.indexOf('assets/ccc/')) > -1) {
         if ((index = absoluteViewPath.indexOf('/assets/')) > -1) {
             componentViewsRoot = absoluteViewPath.substring(0, index) +
                 '/views';
@@ -44,11 +44,11 @@ exports.engine = function (filePath, options, fn) {
     try {
         var template = fs.readFileSync(filePath, 'utf-8');
         var index, component;
-        if ((index = filePath.indexOf('/components/')) > -1) {
-            component = filePath.match(/\/components\/[^\/]+/)[0];
+        if ((index = filePath.indexOf('/ccc/')) > -1) {
+            component = filePath.match(/\/ccc\/[^\/]+/)[0];
             template = rewrite({
                 revPost: function (assetFilePath) {
-                    if (assetFilePath === 'css/components.css') {
+                    if (assetFilePath === 'css/ccc.css') {
                         return '/assets/' + assetFilePath;
                     }
                     return component + '/assets/' + assetFilePath;
@@ -103,11 +103,11 @@ exports.middleware = function (viewsRoot) {
                 findViewAndRender('./views' + reqPath +
                     '/index.html', function () {
                         findViewAndRender(
-                            './components/*/views' + reqPath +
+                            './ccc/*/views' + reqPath +
                             '.html',
                             function () {
                                 findViewAndRender(
-                                    './components/*/views' +
+                                    './ccc/*/views' +
                                     reqPath + '/index.html',
                                     notFound);
                             });
