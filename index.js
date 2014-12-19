@@ -69,7 +69,6 @@ exports.engine = function (filePath, options, fn) {
                     'assets', 'js'), lib)
                     .substring(appRoot.length);
             });
-        console.log(libs);
         html = html.replace(
             /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/,
             function (all, p1, p2) {
