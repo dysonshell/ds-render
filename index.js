@@ -30,8 +30,8 @@ function getPartials(viewsRoot, absoluteViewPath) { //TODO: production 优化，
         });
     var partials = zipObject(partialPairs);
     var index, componentViewsRoot;
-    if ((index = absoluteViewPath.indexOf('assets/ccc/')) > -1) {
-        if ((index = absoluteViewPath.indexOf('/assets/')) > -1) {
+    if (absoluteViewPath && (index = absoluteViewPath.indexOf('/ccc/')) > -1) {
+        if ((index = absoluteViewPath.indexOf('/views/')) > -1) {
             componentViewsRoot = absoluteViewPath.substring(0, index) +
                 '/views';
             return assign(partials, getPartials(componentViewsRoot));
