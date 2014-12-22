@@ -48,7 +48,8 @@ exports.engine = function (filePath, options, fn) {
             component = filePath.match(/\/ccc\/[^\/]+/)[0];
             template = rewrite({
                 revPost: function (assetFilePath) {
-                    if (assetFilePath === 'css/ccc.css') {
+                    if (assetFilePath === 'css/ccc.css' || assetFilePath ===
+                        'js/lib.js') {
                         return '/assets/' + assetFilePath;
                     }
                     return component + '/assets/' + assetFilePath;
@@ -160,7 +161,7 @@ exports.argmentApp = function (app, opts) {
         this.locals.partials = this.locals.partials || getPartials(path.join(
             opts.appRoot,
             opts.viewsDirName));
-    _render.apply(this, arguments);
-};
-app.use(exports.middleware(opts));
+        _render.apply(this, arguments);
+    };
+    app.use(exports.middleware(opts));
 };
