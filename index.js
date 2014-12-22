@@ -71,10 +71,11 @@ exports.engine = function (filePath, options, fn) {
                         'assets', 'js'), lib)
                         .substring(appRoot.length);
                 });
+            var libJsReplaced;
             html = html.replace(
-                /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/,
+                /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/g,
                 function (all, p1, p2) {
-                    return p1 + libs.join(p2 + p1) + p2;
+                    return libJsReplaced ? '' : p1 + libs.join(p2 + p1) + p2;
                 });
         }
         fn(null, html);
@@ -156,10 +157,10 @@ exports.argmentApp = function (app, opts) {
     app.locals.assetsDirName = opts.assetsDirName;
     var _render = app.response.render;
     app.response.render = function () {
-        this.locals.partials = assign(this.locals.partials || {},
-            getPartials(path.join(opts.appRoot,
-                opts.viewsDirName)));
-        _render.apply(this, arguments);
-    };
-    app.use(exports.middleware(opts));
+        this.locals.partials = this.locals.partials || getPartials(path.join(
+            opts.appRoot,
+            opts.viewsDirName));
+    _render.apply(this, arguments);
+};
+app.use(exports.middleware(opts));
 };
