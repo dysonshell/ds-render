@@ -61,34 +61,36 @@ exports.engine = function (filePath, options, fn) {
             data: options
         })
             .toHTML();
-        var appRoot = options._appRoot;
-        var libs = JSON.parse(fs.readFileSync(path.join(appRoot, 'assets', 'js',
-            'lib.json'), 'utf-8'))
-            .map(function (lib) {
-                return path.resolve(path.join(appRoot,
-                    'assets', 'js'), lib)
-                    .substring(appRoot.length);
-            });
-        html = html.replace(
-            /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/,
-            function (all, p1, p2) {
-                return p1 + libs.join(p2 + p1) + p2;
-            });
+        var appRoot = options.appRoot;
+        if (appRoot && options.assetsDirName) {
+            var libs = JSON.parse(fs.readFileSync(path.join(appRoot, options.assetsDirName,
+                'js',
+                'lib.json'), 'utf-8'))
+                .map(function (lib) {
+                    return path.resolve(path.join(appRoot,
+                        'assets', 'js'), lib)
+                        .substring(appRoot.length);
+                });
+            html = html.replace(
+                /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/,
+                function (all, p1, p2) {
+                    return p1 + libs.join(p2 + p1) + p2;
+                });
+        }
         fn(null, html);
     } catch (err) {
         fn(err);
     }
 };
 
-exports.middleware = function (viewsRoot) {
+exports.middleware = function (opts) {
     var resolvedViewPath = {}; //TODO: refactory
-    var appRoot = path.dirname(viewsRoot); //TODO: pass only appRoot
     return function (req, res, next) {
         var reqPath = req.path.replace(/\/$/, '');
         if (res.viewPath) {
             return render(res.viewPath);
         }
-        var viewPath = path.join(viewsRoot, reqPath);
+        var viewPath = path.join(opts.viewsRoot, reqPath);
         if (env === 'production' && viewPath in
             resolvedViewPath) {
             var rvp = resolvedViewPath[viewPath];
@@ -121,14 +123,15 @@ exports.middleware = function (viewsRoot) {
 
         function findViewAndRender(viewPath, nf) {
             glob(viewPath, {
-                cwd: appRoot
+                cwd: opts.appRoot
             }, function (error, files) {
                 if (!files.length) {
                     return nf();
                 }
-                var absoluteViewPath = path.join(appRoot,
+                var absoluteViewPath = path.join(opts.appRoot,
                     files[0]);
-                res.locals.partials = getPartials(viewsRoot,
+                res.locals.partials = getPartials(path.join(opts.appRoot,
+                        opts.viewsDirName),
                     absoluteViewPath);
                 render(absoluteViewPath);
             });
@@ -139,15 +142,15 @@ exports.middleware = function (viewsRoot) {
                 resolvedViewPath) {
                 resolvedViewPath[viewPath] = rvp;
             }
-            res.render(rvp, {
-                _appRoot: appRoot
-            });
+            res.render(rvp);
         }
     };
 };
 
-exports.argmentApp = function (app, viewsRoot) {
+exports.argmentApp = function (app, opts) {
     app.set('view engine', 'html');
     app.engine('html', exports.engine);
-    app.use(exports.middleware(viewsRoot));
+    app.locals.appRoot = opts.appRoot;
+    app.locals.assetsDirName = opts.assetsDirName;
+    app.use(exports.middleware(opts));
 };
