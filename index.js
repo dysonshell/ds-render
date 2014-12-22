@@ -10,29 +10,45 @@ var rewrite = require('rev-rewriter');
 var assign = require('lodash-node/modern/objects/assign');
 
 exports.getPartials = getPartials;
+exports.cRevPost = cRevPost;
+exports.rewriteComponentSource = rewriteComponentSource;
 
-function rewriteComponentTemplate(filePath, template) {
+function cRevPost(component) {
+    component = component || '';
+    return function (assetFilePath) {
+        var prefix = component ? {
+            '.js': '/js/',
+            '.css': '/css/'
+        }[path.extname(assetFilePath)] || '/img/' : '/assets/';
+        return component + prefix + assetFilePath;
+    };
+}
+
+function rewriteComponentSource(filePath, source) {
     var index, component;
     if ((index = filePath.indexOf('/ccc/')) > -1) {
         component = filePath.match(/\/ccc\/[^\/]+/)[0];
-        return rewrite({
-            revPost: function (assetFilePath) {
-                console.log(assetFilePath);
-                if (assetFilePath === 'css/ccc.css' || assetFilePath ===
-                    'js/lib.js') {
-                    return '/assets/' + assetFilePath;
-                }
-                return component + '/assets/' + assetFilePath;
-            }
-        }, template);
+        source = rewrite({
+            assetPathPrefix: '/js/',
+            revPost: cRevPost(component)
+        }, source);
+        source = rewrite({
+            assetPathPrefix: '/css/',
+            revPost: cRevPost(component)
+        }, source);
+        source = rewrite({
+            assetPathPrefix: '/img/',
+            revPost: cRevPost(component)
+        }, source);
+        return source;
     }
-    return template;
+    return source;
 }
 
-function getPartials(viewsRoot, absoluteViewPath) { //TODO: production 优化，cache
-    var partialsRoot = path.join(viewsRoot, '_partials');
+function getPartials(appRoot, absoluteViewPath) { //TODO: production 优化，cache
+    var partialsRoot = path.join(appRoot, 'partials');
     if (!fs.existsSync(partialsRoot)) {
-        return {};
+        return addComponentPartials({});
     }
     var partialPairs = fs.readdirSync(partialsRoot)
         .filter(function (filename) {
@@ -42,30 +58,38 @@ function getPartials(viewsRoot, absoluteViewPath) { //TODO: production 优化，
         })
         .map(function (filename) {
             var filePath = path.join(partialsRoot, filename);
-            var template = rewriteComponentTemplate(filePath, fs.readFileSync(
+            var template = rewriteComponentSource(filePath, fs.readFileSync(
                 filePath, 'utf-8'));
+
             return [
                 filename.replace(htmlExtReg, ''),
                 template
             ]; //TODO: production 优化，save parsed template
         });
-    var partials = zipObject(partialPairs);
-    var index, componentViewsRoot;
-    if (absoluteViewPath && (index = absoluteViewPath.indexOf('/ccc/')) > -1) {
-        if ((index = absoluteViewPath.indexOf('/views/')) > -1) {
-            componentViewsRoot = absoluteViewPath.substring(0, index) +
-                '/views';
-            return assign(partials, getPartials(componentViewsRoot));
+    return addComponentPartials(zipObject(partialPairs));
+
+    function addComponentPartials(globalPartials) {
+        var index, componentRoot;
+        if (absoluteViewPath &&
+            (index = absoluteViewPath.indexOf('/ccc/')) > -1) {
+            if ((index = absoluteViewPath.indexOf('/views/')) > -1) {
+                componentRoot = absoluteViewPath.substring(0, index);
+                return assign(globalPartials, getPartials(componentRoot));
+            }
+        } else {
+            return globalPartials;
         }
     }
-    return partials;
 }
 
 
 exports.engine = function (filePath, options, fn) {
     try {
         var template = fs.readFileSync(filePath, 'utf-8');
-        template = rewriteComponentTemplate(filePath, template);
+        template = rewrite({
+            revPost: cRevPost('')
+        }, template);
+        template = rewriteComponentSource(filePath, template);
         var html = new Ractive({
             partials: options.partials,
             template: template, //TODO: production 优化，cache
@@ -74,7 +98,8 @@ exports.engine = function (filePath, options, fn) {
             .toHTML();
         var appRoot = options.appRoot;
         if (appRoot && options.assetsDirName) {
-            var libs = JSON.parse(fs.readFileSync(path.join(appRoot, options.assetsDirName,
+            var libs = JSON.parse(fs.readFileSync(path.join(appRoot,
+                options.assetsDirName,
                 'js',
                 'lib.json'), 'utf-8'))
                 .map(function (lib) {
@@ -86,7 +111,8 @@ exports.engine = function (filePath, options, fn) {
             html = html.replace(
                 /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/g,
                 function (all, p1, p2) {
-                    return libJsReplaced ? '' : p1 + libs.join(p2 + p1) + p2;
+                    return libJsReplaced ? '' : p1 + libs.join(p2 + p1) +
+                        p2;
                 });
         }
         fn(null, html);
@@ -143,8 +169,7 @@ exports.middleware = function (opts) {
                 var absoluteViewPath = path.join(opts.appRoot,
                     files[0]);
 
-                res.locals.partials = getPartials(path.join(opts.appRoot,
-                        opts.viewsDirName),
+                res.locals.partials = getPartials(opts.appRoot,
                     absoluteViewPath);
 
                 render(absoluteViewPath);
@@ -168,9 +193,7 @@ exports.argmentApp = function (app, opts) {
     app.locals.assetsDirName = opts.assetsDirName;
     var _render = app.response.render;
     app.response.render = function () {
-        this.locals.partials = this.locals.partials || getPartials(path.join(
-            opts.appRoot,
-            opts.viewsDirName));
+        this.locals.partials = this.locals.partials || getPartials(opts.appRoot);
         _render.apply(this, arguments);
     };
     app.use(exports.middleware(opts));
