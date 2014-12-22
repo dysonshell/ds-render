@@ -11,6 +11,24 @@ var assign = require('lodash-node/modern/objects/assign');
 
 exports.getPartials = getPartials;
 
+function rewriteComponentTemplate(filePath, template) {
+    var index, component;
+    if ((index = filePath.indexOf('/ccc/')) > -1) {
+        component = filePath.match(/\/ccc\/[^\/]+/)[0];
+        return rewrite({
+            revPost: function (assetFilePath) {
+                console.log(assetFilePath);
+                if (assetFilePath === 'css/ccc.css' || assetFilePath ===
+                    'js/lib.js') {
+                    return '/assets/' + assetFilePath;
+                }
+                return component + '/assets/' + assetFilePath;
+            }
+        }, template);
+    }
+    return template;
+}
+
 function getPartials(viewsRoot, absoluteViewPath) { //TODO: production 优化，cache
     var partialsRoot = path.join(viewsRoot, '_partials');
     if (!fs.existsSync(partialsRoot)) {
@@ -23,9 +41,12 @@ function getPartials(viewsRoot, absoluteViewPath) { //TODO: production 优化，
                 .isFile();
         })
         .map(function (filename) {
+            var filePath = path.join(partialsRoot, filename);
+            var template = rewriteComponentTemplate(filePath, fs.readFileSync(
+                filePath, 'utf-8'));
             return [
                 filename.replace(htmlExtReg, ''),
-                fs.readFileSync(path.join(partialsRoot, filename), 'utf-8')
+                template
             ]; //TODO: production 优化，save parsed template
         });
     var partials = zipObject(partialPairs);
@@ -40,22 +61,11 @@ function getPartials(viewsRoot, absoluteViewPath) { //TODO: production 优化，
     return partials;
 }
 
+
 exports.engine = function (filePath, options, fn) {
     try {
         var template = fs.readFileSync(filePath, 'utf-8');
-        var index, component;
-        if ((index = filePath.indexOf('/ccc/')) > -1) {
-            component = filePath.match(/\/ccc\/[^\/]+/)[0];
-            template = rewrite({
-                revPost: function (assetFilePath) {
-                    if (assetFilePath === 'css/ccc.css' || assetFilePath ===
-                        'js/lib.js') {
-                        return '/assets/' + assetFilePath;
-                    }
-                    return component + '/assets/' + assetFilePath;
-                }
-            }, template);
-        }
+        template = rewriteComponentTemplate(filePath, template);
         var html = new Ractive({
             partials: options.partials,
             template: template, //TODO: production 优化，cache
