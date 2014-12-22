@@ -90,7 +90,7 @@ exports.middleware = function (opts) {
         if (res.viewPath) {
             return render(res.viewPath);
         }
-        var viewPath = path.join(opts.viewsRoot, reqPath);
+        var viewPath = path.join(opts.appRoot, opts.viewsDirName, reqPath);
         if (env === 'production' && viewPath in
             resolvedViewPath) {
             var rvp = resolvedViewPath[viewPath];
