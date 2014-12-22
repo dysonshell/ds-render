@@ -130,9 +130,11 @@ exports.middleware = function (opts) {
                 }
                 var absoluteViewPath = path.join(opts.appRoot,
                     files[0]);
+
                 res.locals.partials = getPartials(path.join(opts.appRoot,
                         opts.viewsDirName),
                     absoluteViewPath);
+
                 render(absoluteViewPath);
             });
         }
@@ -152,5 +154,12 @@ exports.argmentApp = function (app, opts) {
     app.engine('html', exports.engine);
     app.locals.appRoot = opts.appRoot;
     app.locals.assetsDirName = opts.assetsDirName;
+    var _render = app.response.render;
+    app.response.render = function () {
+        this.locals.partials = assign(this.locals.partials || {},
+            getPartials(path.join(opts.appRoot,
+                opts.viewsDirName)));
+        _render.apply(this, arguments);
+    };
     app.use(exports.middleware(opts));
 };
