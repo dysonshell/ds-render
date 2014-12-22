@@ -88,7 +88,7 @@ exports.middleware = function (opts) {
     return function (req, res, next) {
         var reqPath = req.path.replace(/\/$/, '');
         if (res.viewPath) {
-            return render(res.viewPath);
+            return render(path.join(opts.appRoot, opts.viewsDirName, res.viewPath));
         }
         var viewPath = path.join(opts.appRoot, opts.viewsDirName, reqPath);
         if (env === 'production' && viewPath in
