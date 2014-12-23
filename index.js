@@ -191,10 +191,20 @@ exports.argmentApp = function (app, opts) {
     app.engine('html', exports.engine);
     app.locals.appRoot = opts.appRoot;
     app.locals.assetsDirName = opts.assetsDirName;
-    var _render = app.response.render;
-    app.response.render = function () {
-        this.locals.partials = this.locals.partials || getPartials(opts.appRoot);
-        _render.apply(this, arguments);
-    };
+    app.use(function (req, res, next) {
+        var _render = res.render;
+        res.render = function (view, options, fn) {
+            if ('function' === typeof options) {
+                fn = options;
+                options = {};
+            }
+            this.locals.partials = this.locals.partials || getPartials(opts
+                .appRoot);
+            options = assign({}, app.locals, this.locals, options);
+            this.locals = {};
+            _render.call(this, view, options, fn);
+        };
+        next();
+    });
     app.use(exports.middleware(opts));
 };
