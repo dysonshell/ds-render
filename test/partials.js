@@ -18,7 +18,7 @@ tape('partial/a', function (test) {
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), 'partial aaa');
+            test.equal(res.text.trim(), 'partial a');
         });
 });
 
