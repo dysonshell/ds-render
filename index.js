@@ -69,6 +69,7 @@ function getPartials(appRoot, absoluteViewPath) { //TODO: production 优化，ca
                 template
             ]; //TODO: production 优化，save parsed template
         });
+
     return addComponentPartials(zipObject(partialPairs));
 
     function addComponentPartials(globalPartials) {
@@ -137,7 +138,10 @@ exports.middleware = function (opts) {
     return function (req, res, next) {
         var reqPath = req.path.replace(/\/$/, '');
         if (res.viewPath) {
-            return render(path.join(opts.appRoot, opts.viewsDirName, res.viewPath));
+            reqPath = res.viewPath;
+            if (res.viewPath[0] !== '/') {
+                reqPath = '/' + reqPath;
+            }
         }
         var viewPath = path.join(opts.appRoot, opts.viewsDirName, reqPath);
         if (env === 'production' && viewPath in
@@ -149,21 +153,16 @@ exports.middleware = function (opts) {
                 return render(rvp);
             }
         }
-        findViewAndRender('./views' + reqPath + '.html',
-            function () {
-                findViewAndRender('./views' + reqPath +
-                    '/index.html', function () {
-                        findViewAndRender(
-                            './ccc/*/views' + reqPath +
-                            '.html',
-                            function () {
-                                findViewAndRender(
-                                    './ccc/*/views' +
-                                    reqPath + '/index.html',
-                                    notFound);
-                            });
-                    });
-            });
+        findViewAndRender('./ccc/*/views' + reqPath + '.html', function () {
+            findViewAndRender('./ccc/*/views' + reqPath + '/index.html',
+                function () {
+                    findViewAndRender('./views' + reqPath + '.html',
+                        function () {
+                            findViewAndRender('./views' + reqPath +
+                                '/index.html', notFound);
+                        });
+                });
+        });
 
         function notFound() { //TODO: fix it
             resolvedViewPath[viewPath] = false;
