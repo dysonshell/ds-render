@@ -125,10 +125,9 @@ exports.engine = function (filePath, options, fn) {
                     if (libJsReplaced) {
                         return "";
                     } else {
-                        var ret = p1 + libs.join(p2 + p1) +
-                            p2;
                         libJsReplaced = true;
-                        return ret;
+                        return p1 + libs.join(p2 + p1) +
+                            p2;
                     }
                 });
         }
