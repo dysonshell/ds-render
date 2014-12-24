@@ -50,23 +50,14 @@ function getPartials(appRoot, absoluteViewPath) { //TODO: production 优化，ca
     if (!fs.existsSync(partialsRoot)) {
         return addComponentPartials({});
     }
-    var partialPairs = fs.readdirSync(partialsRoot)
-        .filter(function (filename) {
-            return filename.match(htmlExtReg) &&
-                fs.statSync(path.join(partialsRoot, filename))
-                .isFile();
-        })
-        .map(function (filename) {
-            var filePath = path.join(partialsRoot, filename);
-            var template = rewriteComponentSource(filePath, fs.readFileSync(
-                filePath, 'utf-8'));
 
-            return [
-                filename.replace(htmlExtReg, ''),
-                template
-            ]; //TODO: production 优化，save parsed template
-        });
-    return addComponentPartials(zipObject(partialPairs));
+    // support nested partials
+    // such as 
+    //     /ccc/account/partials/settings/bankcard.html
+    //                                   /agreement.html
+    // 引用 {{>settings.bankcard}}
+    var obj = getPartialsObj(partialsRoot); // global partials
+    return addComponentPartials(obj);
 
     function addComponentPartials(globalPartials) {
         var index, componentRoot;
@@ -74,11 +65,47 @@ function getPartials(appRoot, absoluteViewPath) { //TODO: production 优化，ca
             (index = absoluteViewPath.indexOf('/ccc/')) > -1) {
             if ((index = absoluteViewPath.indexOf('/views/')) > -1) {
                 componentRoot = absoluteViewPath.substring(0, index);
-                return assign(globalPartials, getPartials(componentRoot));
+
+                var componentPartialsObj = getPartialsObj(path.join(
+                    componentRoot, "partials")); // 子component的partials
+                return assign(globalPartials, componentPartialsObj);
             }
         } else {
             return globalPartials;
         }
+    }
+}
+
+// 根据一个目录,返回对应的obj
+// 扁平结构
+function getPartialsObj(root) {
+    var ret = {};
+    processDir(root);
+    return ret;
+
+    function processDir(dir, keypath) {
+        keypath = keypath || []; // default []
+
+        fs.readdirSync(dir)
+            .forEach(function (entry) {
+                var entryPath = path.join(dir, entry);
+                var s = fs.statSync(entryPath);
+
+                if (s.isDirectory()) { // dir
+                    processDir(entryPath, keypath.concat(entry));
+                } else if (s.isFile() && entry.match(htmlExtReg)) { // file
+                    // key
+                    var entryWithNoExt = entry.replace(htmlExtReg, '');
+                    var key = keypath.concat(entryWithNoExt)
+                        .join(".");
+
+                    // value
+                    var template = rewriteComponentSource(entryPath, fs.readFileSync(
+                        entryPath, 'utf-8'));
+
+                    ret[key] = template;
+                }
+            });
     }
 }
 
