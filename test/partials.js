@@ -19,7 +19,6 @@ tape('partial/a', function (test) {
         .end(function (err, res) {
             test.notOk(err);
             test.equal(res.text.trim(), 'partial a');
-            if (err) throw err;
         });
 });
 
@@ -31,6 +30,5 @@ tape('partial/deep', function (test) {
         .end(function (err, res) {
             test.notOk(err);
             test.equal(res.text.trim(), 'deep partial');
-            if (err) throw err;
         });
 });
