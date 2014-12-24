@@ -7,7 +7,7 @@
     "index.js"
   ],
   "scripts": {
-    "test": "tape"
+    "test": "tape test/*.js"
   },
   "repository": {
     "type": "git",
@@ -23,6 +23,8 @@
     "ractive": "^0.6.1"
   },
   "devDependencies": {
+    "express": "^4.10.6",
+    "supertest": "^0.15.0",
     "tape": "^3.0.3"
   },
   "dependencies": {

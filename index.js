@@ -50,7 +50,9 @@ function getPartials(appRoot, absoluteViewPath) { //TODO: production 优化，ca
     if (!fs.existsSync(partialsRoot)) {
         return addComponentPartials({});
     }
-    var partialPairs = fs.readdirSync(partialsRoot)
+    var partialPairs = glob.sync('**/*.html', {
+        cwd: partialsRoot
+    })
         .filter(function (filename) {
             return filename.match(htmlExtReg) &&
                 fs.statSync(path.join(partialsRoot, filename))
@@ -62,7 +64,8 @@ function getPartials(appRoot, absoluteViewPath) { //TODO: production 优化，ca
                 filePath, 'utf-8'));
 
             return [
-                filename.replace(htmlExtReg, ''),
+                filename.replace(htmlExtReg, '')
+                .replace(/\/+/g, '.'),
                 template
             ]; //TODO: production 优化，save parsed template
         });
@@ -98,19 +101,27 @@ exports.engine = function (filePath, options, fn) {
             .toHTML();
         var appRoot = options.appRoot;
         if (appRoot && options.assetsDirName) {
-            var libs = JSON.parse(fs.readFileSync(path.join(appRoot,
-                options.assetsDirName,
-                'js',
-                'lib.json'), 'utf-8'))
-                .map(function (lib) {
-                    return path.resolve(path.join(appRoot,
-                        'assets', 'js'), lib)
-                        .substring(appRoot.length);
-                });
+            var libs = [];
+            try {
+                libs = JSON.parse(fs.readFileSync(path.join(appRoot,
+                    options.assetsDirName,
+                    'js',
+                    'lib.json'), 'utf-8'));
+            } catch (err) {
+                if (err.code !== 'ENOENT') {
+                    throw err;
+                }
+            }
+            libs.map(function (lib) {
+                return path.resolve(path.join(appRoot,
+                    'assets', 'js'), lib)
+                    .substring(appRoot.length);
+            });
             var libJsReplaced;
             html = html.replace(
                 /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/g,
                 function (all, p1, p2) {
+                    libJsReplaced = true;
                     return libJsReplaced ? '' : p1 + libs.join(p2 + p1) +
                         p2;
                 });
@@ -193,6 +204,7 @@ exports.argmentApp = function (app, opts) {
     app.locals.assetsDirName = opts.assetsDirName;
     app.use(function (req, res, next) {
         var _render = res.render;
+        // 让 res.viewPath 支持 express-promise
         res.render = function (view, options, fn) {
             if ('function' === typeof options) {
                 fn = options;
