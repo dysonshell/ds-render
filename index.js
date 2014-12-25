@@ -113,7 +113,7 @@ exports.engine = function (filePath, options, fn) {
                     throw err;
                 }
             }
-            libs.map(function (lib) {
+            libs = libs.map(function (lib) {
                 return path.resolve(path.join(appRoot,
                     'assets', 'js'), lib)
                     .substring(appRoot.length);
@@ -122,9 +122,13 @@ exports.engine = function (filePath, options, fn) {
             html = html.replace(
                 /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/g,
                 function (all, p1, p2) {
-                    libJsReplaced = true;
-                    return libJsReplaced ? '' : p1 + libs.join(p2 + p1) +
-                        p2;
+                    if (libJsReplaced) {
+                        return "";
+                    } else {
+                        libJsReplaced = true;
+                        return p1 + libs.join(p2 + p1) +
+                            p2;
+                    }
                 });
         }
         fn(null, html);
