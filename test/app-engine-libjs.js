@@ -2,6 +2,7 @@
 var path = require('path');
 var tape = require('tape');
 var app = require('express')();
+app.set('views', path.join(__dirname, 'example', 'views'));
 var request = require('supertest');
 
 app.get('/cccc', function (req, res, next) {

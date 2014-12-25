@@ -2,6 +2,7 @@
 var path = require('path');
 var tape = require('tape');
 var app = require('express')();
+app.set('views', path.join(__dirname, 'example', 'views'));
 var request = require('supertest');
 
 require('../')
@@ -17,6 +18,9 @@ tape('partial/a', function (test) {
         .get('/a')
         .expect(200)
         .end(function (err, res) {
+            if (err) {
+                console.error(err);
+            }
             test.notOk(err);
             test.equal(res.text.trim(), 'partial a');
         });
@@ -28,6 +32,9 @@ tape('partial/deep', function (test) {
         .get('/deep')
         .expect(200)
         .end(function (err, res) {
+            if (err) {
+                console.error(err);
+            }
             test.notOk(err);
             test.equal(res.text.trim(), 'deep partial');
         });
