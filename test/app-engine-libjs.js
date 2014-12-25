@@ -18,7 +18,7 @@ require('../')
 
 tape("/assets/js/lib.js should be replaced with scripts specified in lib.json",
     function (test) {
-        test.plan(2);
+//        test.plan(2);
         request(app)
             .get('/libjs')
             .expect(200)
@@ -26,7 +26,14 @@ tape("/assets/js/lib.js should be replaced with scripts specified in lib.json",
                 test.notOk(err);
 
                 var libs = require('./example/assets/js/lib.json');
+                libs.forEach(function(lib){
+                    var expect = path.resolve("/assets/js",lib);
+                    test.ok(res.text.match(new RegExp("<script\\s+src=['\"]"+ expect +"['\"]><\\/script>","ig")));
+                });
+                
                 test.equal(res.text.match(/script/g)
                     .length, libs.length * 2);
+            
+                test.end();
             });
     });
