@@ -6,6 +6,7 @@ var fs = require('fs');
 var zipObject = require('lodash-node/modern/arrays/zipObject');
 var env = process.env.NODE_ENV || 'development';
 var glob = require('glob');
+var unary = require('fn-unary');
 var rewrite = require('rev-rewriter');
 var assign = require('lodash-node/modern/objects/assign');
 
@@ -143,60 +144,11 @@ exports.middleware = function (opts) {
         var reqPath = req.path.replace(/\/$/, '');
         if (res.viewPath) {
             reqPath = res.viewPath;
-            if (res.viewPath[0] !== '/') {
-                reqPath = '/' + reqPath;
-            }
         }
-        var viewPath = path.join(opts.appRoot, opts.viewsDirName, reqPath);
-        if (env === 'production' && viewPath in
-            resolvedViewPath) {
-            var rvp = resolvedViewPath[viewPath];
-            if (false === rvp) {
-                return notFound();
-            } else {
-                return render(rvp);
-            }
+        if (reqPath[0] === '/') {
+            reqPath = reqPath.substring(1);
         }
-        findViewAndRender('./ccc/*/views' + reqPath + '.html', function () {
-            findViewAndRender('./ccc/*/views' + reqPath + '/index.html',
-                function () {
-                    findViewAndRender('./views' + reqPath + '.html',
-                        function () {
-                            findViewAndRender('./views' + reqPath +
-                                '/index.html', notFound);
-                        });
-                });
-        });
-
-        function notFound() { //TODO: fix it
-            resolvedViewPath[viewPath] = false;
-            next();
-        }
-
-        function findViewAndRender(viewPath, nf) {
-            glob(viewPath, {
-                cwd: opts.appRoot
-            }, function (error, files) {
-                if (!files.length) {
-                    return nf();
-                }
-                var absoluteViewPath = path.join(opts.appRoot,
-                    files[0]);
-
-                res.locals.partials = getPartials(opts.appRoot,
-                    absoluteViewPath);
-
-                render(absoluteViewPath);
-            });
-        }
-
-        function render(rvp) {
-            if (env === 'production' && viewPath in
-                resolvedViewPath) {
-                resolvedViewPath[viewPath] = rvp;
-            }
-            res.render(rvp);
-        }
+        return res.render(reqPath);
     };
 };
 
@@ -205,6 +157,12 @@ exports.argmentApp = function (app, opts) {
     app.engine('html', exports.engine);
     app.locals.appRoot = opts.appRoot;
     app.locals.assetsDirName = opts.assetsDirName;
+    app.set('views', [].concat(app.get('views'))
+        .concat(glob.sync('ccc/*/views/', {
+                cwd: opts.appRoot
+            })
+            .map(unary(path.join.bind(path, opts.appRoot))))
+        .filter(Boolean));
     app.use(function (req, res, next) {
         var _render = res.render;
         // 让 res.viewPath 支持 express-promise

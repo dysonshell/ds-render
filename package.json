@@ -1,13 +1,14 @@
 {
   "name": "@ds/render",
-  "version": "0.3.4",
+  "version": "0.4.0-pre",
   "description": "render module for dysonshell",
   "main": "index.js",
   "files": [
     "index.js"
   ],
   "scripts": {
-    "test": "tape test/*.js"
+    "test": "tape",
+    "test-all": "tape test/*.js"
   },
   "repository": {
     "type": "git",
@@ -28,6 +29,7 @@
     "tape": "^3.0.3"
   },
   "dependencies": {
+    "fn-unary": "^1.0.0",
     "glob": "^4.3.1",
     "lodash-node": "^2.4.1",
     "rev-rewriter": "^1.1.0"
