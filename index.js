@@ -46,10 +46,10 @@ function rewriteComponentSource(filePath, source) {
     return source;
 }
 
-function getPartials(appRoot, absoluteViewPath) { //TODO: production 优化，cache
+function getPartials(appRoot) { //TODO: production 优化，cache
     var partialsRoot = path.join(appRoot, 'partials');
     if (!fs.existsSync(partialsRoot)) {
-        return addComponentPartials({});
+        return {};
     }
     var partialPairs = glob.sync('**/*.html', {
         cwd: partialsRoot
@@ -71,20 +71,7 @@ function getPartials(appRoot, absoluteViewPath) { //TODO: production 优化，ca
             ]; //TODO: production 优化，save parsed template
         });
 
-    return addComponentPartials(zipObject(partialPairs));
-
-    function addComponentPartials(globalPartials) {
-        var index, componentRoot;
-        if (absoluteViewPath &&
-            (index = absoluteViewPath.indexOf('/ccc/')) > -1) {
-            if ((index = absoluteViewPath.indexOf('/views/')) > -1) {
-                componentRoot = absoluteViewPath.substring(0, index);
-                return assign(globalPartials, getPartials(componentRoot));
-            }
-        } else {
-            return globalPartials;
-        }
-    }
+    return zipObject(partialPairs);
 }
 
 
