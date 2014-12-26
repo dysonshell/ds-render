@@ -3,6 +3,14 @@ var tape = require('tape');
 var app = require('./example')();
 var request = require('supertest');
 
+app.get('/a', function (req, res) {
+    console.log(res.render.toString());
+    res.render();
+});
+app.get('/b', function (req, res) {
+    res.render('a');
+});
+
 app.use(require('../')
     .middleware());
 
@@ -12,24 +20,19 @@ tape('partial/a', function (test) {
         .get('/a')
         .expect(200)
         .end(function (err, res) {
-            if (err) {
-                console.error(err);
-            }
             test.notOk(err);
             test.equal(res.text.trim(), 'partial a');
         });
 });
 
-tape('partial/deep', function (test) {
+
+tape('partial/b', function (test) {
     test.plan(2);
     request(app)
-        .get('/deep')
+        .get('/b')
         .expect(200)
         .end(function (err, res) {
-            if (err) {
-                console.error(err);
-            }
             test.notOk(err);
-            test.equal(res.text.trim(), 'deep partial');
+            test.equal(res.text.trim(), 'partial a');
         });
 });

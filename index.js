@@ -138,16 +138,20 @@ exports.engine = function (filePath, options, fn) {
     }
 };
 
-exports.middleware = function (opts) {
-    var resolvedViewPath = {}; //TODO: refactory
-    return function (req, res, next) {
-        var reqPath = req.path.replace(/\/$/, '');
+function getReqPath(req) {
+    return req.path.replace(/^\/|\/$/g, '');
+}
+
+exports.middleware = function () {
+    return function (req, res) {
+        var reqPath = getReqPath(req);
         if (res.viewPath) {
             reqPath = res.viewPath;
         }
         if (reqPath[0] === '/') {
             reqPath = reqPath.substring(1);
         }
+        console.log('reqPath', reqPath);
         return res.render(reqPath);
     };
 };
@@ -167,6 +171,12 @@ exports.argmentApp = function (app, opts) {
         var _render = res.render;
         // 让 res.viewPath 支持 express-promise
         res.render = function (view, options, fn) {
+            console.log('req.path', req.path);
+            console.log('this.req.path', this.req.path);
+            if (!view) {
+                view = getReqPath(this.req);
+            }
+            console.log(view);
             if ('function' === typeof options) {
                 fn = options;
                 options = {};
@@ -179,5 +189,7 @@ exports.argmentApp = function (app, opts) {
         };
         next();
     });
-    app.use(exports.middleware(opts));
+    if (opts.appendMiddleware !== false) {
+        app.use(exports.middleware());
+    }
 };

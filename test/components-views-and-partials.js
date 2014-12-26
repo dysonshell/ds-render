@@ -1,20 +1,15 @@
 'use strict';
-var path = require('path');
 var tape = require('tape');
-var app = require('express')();
-app.set('views', path.join(__dirname, 'example', 'views'));
+var app = require('./example')();
 var request = require('supertest');
+
 app.get('/cccc', function (req, res, next) {
     res.viewPath = '/ccc';
     next();
 });
 
-require('../')
-    .argmentApp(app, {
-        appRoot: path.join(__dirname, 'example'),
-        assetsDirName: 'assets',
-        viewsDirName: 'views'
-    });
+app.use(require('../')
+    .middleware());
 
 tape('when global view and components view name conflicts, ' +
     'solve to global view.',
