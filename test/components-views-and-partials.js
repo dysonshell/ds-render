@@ -43,3 +43,15 @@ tape('res.render(otherViewPath) in sub-apps',
                 test.equal(res.text.trim(), 'partial in testc');
             });
     });
+
+tape('for auto solved viewPath, also include components partials',
+    function (test) {
+        test.plan(2);
+        request(app)
+            .get('/ccccc')
+            .expect(200)
+            .end(function (err, res) {
+                test.notOk(err);
+                test.equal(res.text.trim(), 'partial in testc');
+            });
+    });

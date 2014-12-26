@@ -74,7 +74,43 @@ function getPartials(appRoot) { //TODO: production 优化，cache
     return zipObject(partialPairs);
 }
 
+function replaceLibJs(html, options) {
+    var settings = options.settings;
+    var appRoot = (settings || {})
+        .appRoot;
 
+    if (appRoot && settings.assetsDirName) {
+        var libs = [];
+        try {
+            libs = JSON.parse(fs.readFileSync(path.join(appRoot,
+                settings.assetsDirName,
+                'js',
+                'lib.json'), 'utf-8'));
+        } catch (err) {
+            if (err.code !== 'ENOENT') {
+                throw err;
+            }
+        }
+        libs = libs.map(function (lib) {
+            return path.resolve(path.join(appRoot,
+                'assets', 'js'), lib)
+                .substring(appRoot.length);
+        });
+        var libJsReplaced;
+        html = html.replace(
+            /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/g,
+            function (all, p1, p2) {
+                if (libJsReplaced) {
+                    return "";
+                } else {
+                    libJsReplaced = true;
+                    return p1 + libs.join(p2 + p1) +
+                        p2;
+                }
+            });
+    }
+    return html;
+}
 exports.engine = function (filePath, options, fn) {
     try {
         var template = fs.readFileSync(filePath, 'utf-8');
@@ -82,46 +118,22 @@ exports.engine = function (filePath, options, fn) {
             revPost: cRevPost('')
         }, template);
         template = rewriteComponentSource(filePath, template);
+        var partials = options.partials;
+        var match = filePath.match(/\/ccc\/[^\/]+\/views\//);
+        if (match) {
+            var componentRoot = (filePath.substring(0, match.index) + match[0])
+                .replace(/\/views\/$/, '');
+            if (componentRoot !== options.settings.subAppRoot) {
+                assign(partials, getPartials(componentRoot));
+            }
+        }
         var html = new Ractive({
-            partials: options.partials,
+            partials: partials,
             template: template, //TODO: production 优化，cache
             data: options
         })
             .toHTML();
-        var settings = options.settings;
-        var appRoot = (settings || {}).appRoot;
-
-        if (appRoot && settings.assetsDirName) {
-            var libs = [];
-            try {
-                libs = JSON.parse(fs.readFileSync(path.join(appRoot,
-                    settings.assetsDirName,
-                    'js',
-                    'lib.json'), 'utf-8'));
-            } catch (err) {
-                if (err.code !== 'ENOENT') {
-                    throw err;
-                }
-            }
-            libs = libs.map(function (lib) {
-                return path.resolve(path.join(appRoot,
-                    'assets', 'js'), lib)
-                    .substring(appRoot.length);
-            });
-            var libJsReplaced;
-            html = html.replace(
-                /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/g,
-                function (all, p1, p2) {
-                    if (libJsReplaced) {
-                        return "";
-                    } else {
-                        libJsReplaced = true;
-                        return p1 + libs.join(p2 + p1) +
-                            p2;
-                    }
-                });
-        }
-        fn(null, html);
+        fn(null, replaceLibJs(html, options));
     } catch (err) {
         fn(err);
     }
