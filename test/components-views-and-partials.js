@@ -3,16 +3,24 @@ var tape = require('tape');
 var app = require('./example')();
 var request = require('supertest');
 
-app.get('/cccc', function (req, res, next) {
-    res.viewPath = '/ccc';
-    next();
+var path = require('path');
+var subApp = require('@ds/base').createSubApp(path.join(__dirname, 'example', 'ccc', 'testc'));
+
+subApp.get('/ccc', function (req, res) {
+    res.render();
 });
+
+subApp.get('/cccc', function (req, res) {
+    res.render('ccc');
+});
+
+app.use(subApp);
 
 app.use(require('../')
     .middleware());
 
-tape('when global view and components view name conflicts, ' +
-    'solve to global view.',
+tape('when res.render() from sub-apps, solve components views first, ' +
+    'and including components partials.',
     function (test) {
         test.plan(2);
         request(app)
@@ -20,11 +28,11 @@ tape('when global view and components view name conflicts, ' +
             .expect(200)
             .end(function (err, res) {
                 test.notOk(err);
-                test.equal(res.text.trim(), 'partial a');
+                test.equal(res.text.trim(), 'partial in testc');
             });
     });
 
-tape('also support res.viewPath, treat exactly like req.path',
+tape('res.render(otherViewPath) in sub-apps',
     function (test) {
         test.plan(2);
         request(app)
@@ -32,6 +40,6 @@ tape('also support res.viewPath, treat exactly like req.path',
             .expect(200)
             .end(function (err, res) {
                 test.notOk(err);
-                test.equal(res.text.trim(), 'partial a');
+                test.equal(res.text.trim(), 'partial in testc');
             });
     });

@@ -4,7 +4,6 @@ var app = require('./example')();
 var request = require('supertest');
 
 app.get('/a', function (req, res) {
-    console.log(res.render.toString());
     res.render();
 });
 app.get('/b', function (req, res) {

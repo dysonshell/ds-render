@@ -101,12 +101,14 @@ exports.engine = function (filePath, options, fn) {
             data: options
         })
             .toHTML();
-        var appRoot = options.appRoot;
-        if (appRoot && options.assetsDirName) {
+        var settings = options.settings;
+        var appRoot = (settings || {}).appRoot;
+
+        if (appRoot && settings.assetsDirName) {
             var libs = [];
             try {
                 libs = JSON.parse(fs.readFileSync(path.join(appRoot,
-                    options.assetsDirName,
+                    settings.assetsDirName,
                     'js',
                     'lib.json'), 'utf-8'));
             } catch (err) {
@@ -151,7 +153,6 @@ exports.middleware = function () {
         if (reqPath[0] === '/') {
             reqPath = reqPath.substring(1);
         }
-        console.log('reqPath', reqPath);
         return res.render(reqPath);
     };
 };
@@ -159,8 +160,8 @@ exports.middleware = function () {
 exports.argmentApp = function (app, opts) {
     app.set('view engine', 'html');
     app.engine('html', exports.engine);
-    app.locals.appRoot = opts.appRoot;
-    app.locals.assetsDirName = opts.assetsDirName;
+    app.set('appRoot', opts.appRoot);
+    app.set('assetsDirName', opts.assetsDirName);
     app.set('views', [].concat(app.get('views'))
         .concat(glob.sync('ccc/*/views/', {
                 cwd: opts.appRoot
@@ -171,19 +172,35 @@ exports.argmentApp = function (app, opts) {
         var _render = res.render;
         // 让 res.viewPath 支持 express-promise
         res.render = function (view, options, fn) {
-            console.log('req.path', req.path);
-            console.log('this.req.path', this.req.path);
             if (!view) {
                 view = getReqPath(this.req);
             }
-            console.log(view);
             if ('function' === typeof options) {
                 fn = options;
                 options = {};
             }
-            this.locals.partials = this.locals.partials || getPartials(opts
-                .appRoot);
-            options = assign({}, app.locals, this.locals, options);
+            options = options || {};
+            var appLocals = {};
+            if (this.app.locals.__proto__) { // support sub-app, but not sub-sub-app
+                assign(appLocals, this.app.locals.__proto__);
+            }
+            assign(appLocals, this.app.locals);
+
+            var partials = {};
+            assign(partials, getPartials(this.app.set('appRoot')));
+            if (this.app.set('subAppRoot')) {
+                assign(partials, getPartials(this.app.set('subAppRoot')));
+            }
+            if (this.locals.partials) {
+                assign(partials, this.locals.partials);
+            }
+            if (options.partials) {
+                assign(partials, options.partials);
+            }
+
+            options = assign({}, appLocals, this.locals, options, {
+                partials: partials
+            });
             this.locals = {};
             _render.call(this, view, options, fn);
         };
