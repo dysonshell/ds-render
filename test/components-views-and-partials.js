@@ -1,23 +1,26 @@
 'use strict';
-var path = require('path');
 var tape = require('tape');
-var app = require('express')();
-app.set('views', path.join(__dirname, 'example', 'views'));
+var app = require('./example')();
 var request = require('supertest');
-app.get('/cccc', function (req, res, next) {
-    res.viewPath = '/ccc';
-    next();
+
+var path = require('path');
+var subApp = require('@ds/base').createSubApp(path.join(__dirname, 'example', 'ccc', 'testc'));
+
+subApp.get('/ccc', function (req, res) {
+    res.render();
 });
 
-require('../')
-    .argmentApp(app, {
-        appRoot: path.join(__dirname, 'example'),
-        assetsDirName: 'assets',
-        viewsDirName: 'views'
-    });
+subApp.get('/cccc', function (req, res) {
+    res.render('ccc');
+});
 
-tape('when global view and components view name conflicts, ' +
-    'solve to global view.',
+app.use(subApp);
+
+app.use(require('../')
+    .middleware());
+
+tape('when res.render() from sub-apps, solve components views first, ' +
+    'and including components partials.',
     function (test) {
         test.plan(2);
         request(app)
@@ -25,11 +28,11 @@ tape('when global view and components view name conflicts, ' +
             .expect(200)
             .end(function (err, res) {
                 test.notOk(err);
-                test.equal(res.text.trim(), 'partial a');
+                test.equal(res.text.trim(), 'partial in testc');
             });
     });
 
-tape('also support res.viewPath, treat exactly like req.path',
+tape('res.render(otherViewPath) in sub-apps',
     function (test) {
         test.plan(2);
         request(app)
@@ -37,6 +40,18 @@ tape('also support res.viewPath, treat exactly like req.path',
             .expect(200)
             .end(function (err, res) {
                 test.notOk(err);
-                test.equal(res.text.trim(), 'partial a');
+                test.equal(res.text.trim(), 'partial in testc');
+            });
+    });
+
+tape('for auto solved viewPath, also include components partials',
+    function (test) {
+        test.plan(2);
+        request(app)
+            .get('/ccccc')
+            .expect(200)
+            .end(function (err, res) {
+                test.notOk(err);
+                test.equal(res.text.trim(), 'partial in testc');
             });
     });

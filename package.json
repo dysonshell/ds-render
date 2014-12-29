@@ -1,6 +1,6 @@
 {
   "name": "@ds/render",
-  "version": "0.4.0-pre",
+  "version": "0.4.2",
   "description": "render module for dysonshell",
   "main": "index.js",
   "files": [
@@ -20,6 +20,7 @@
   "author": "undoZen <opensource@undozen.com>",
   "license": "private",
   "peerDependencies": {
+    "@ds/base": "*",
     "lodash-node": "^2.4.1",
     "ractive": "^0.6.1"
   },
