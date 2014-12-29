@@ -144,7 +144,7 @@ function getReqPath(req) {
 }
 
 exports.middleware = function () {
-    return function (req, res) {
+    return function (req, res, next) {
         var reqPath = getReqPath(req);
         if (res.viewPath) {
             reqPath = res.viewPath;
@@ -152,7 +152,20 @@ exports.middleware = function () {
         if (reqPath[0] === '/') {
             reqPath = reqPath.substring(1);
         }
-        return res.render(reqPath);
+        var ext = path.extname(reqPath);
+        if (ext && ext !== '.html') {
+            return next();
+        }
+        return res.render(reqPath, function (err, str) {
+            if (err) {
+                if (err.message.indexOf('Failed to lookup view') === 0) {
+                    return next(); // 404
+                } else {
+                    return next(err);
+                }
+            }
+            res.send(str);
+        });
     };
 };
 
