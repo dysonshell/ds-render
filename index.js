@@ -47,14 +47,14 @@ function rewriteComponentSource(filePath, source) {
     return source;
 }
 
-function getPartials(appRoot, cb) { //TODO: production 优化，cache
+function getPartials(appRoot, files, cb) { //TODO: production 优化，cache
     var partialsRoot = path.join(appRoot, 'partials');
-    if (!fs.existsSync(partialsRoot)) {
-        return {};
+    if (typeof files === 'function') {
+        cb = files;
+        files = null;
     }
-    glob('**/*.html', {
-        cwd: partialsRoot
-    }, errto(cb, function (files) {
+
+    var gotFiles = errto(cb, function (files) {
         async.reduce(files, {}, function (partials, filename, next) {
             var filePath = path.join(partialsRoot, filename);
             fs.readFile(filePath, 'utf-8', errto(next, function (
@@ -65,11 +65,24 @@ function getPartials(appRoot, cb) { //TODO: production 优化，cache
                         content);
                 next(null, partials);
             }));
-        }, function (err, p) {
-            cb(err, p);
-        });
+        }, cb);
+    });
 
-    }));
+    if (files) {
+        gotFiles(null, files);
+    } else {
+        fs.exists(partialsRoot, function (exists) {
+            if (!exists) {
+                cb(null, {});
+            } else {
+                glob('**/*.html', {
+                    cwd: partialsRoot
+                }, gotFiles);
+            }
+
+        });
+    }
+
 }
 
 function replaceLibJs(html, options) {
