@@ -3,10 +3,11 @@ var Ractive = require('ractive');
 var htmlExtReg = /\.html$/i;
 var path = require('path');
 var fs = require('fs');
-var zipObject = require('lodash-node/modern/arrays/zipObject');
 var env = process.env.NODE_ENV || 'development';
 var glob = require('glob');
 var unary = require('fn-unary');
+var errto = require('errto');
+var async = require('async');
 var rewrite = require('rev-rewriter');
 var assign = require('lodash-node/modern/objects/assign');
 
@@ -46,32 +47,42 @@ function rewriteComponentSource(filePath, source) {
     return source;
 }
 
-function getPartials(appRoot) { //TODO: production 优化，cache
+function getPartials(appRoot, files, cb) { //TODO: production 优化，cache
     var partialsRoot = path.join(appRoot, 'partials');
-    if (!fs.existsSync(partialsRoot)) {
-        return {};
+    if (typeof files === 'function') {
+        cb = files;
+        files = null;
     }
-    var partialPairs = glob.sync('**/*.html', {
-        cwd: partialsRoot
-    })
-        .filter(function (filename) {
-            return filename.match(htmlExtReg) &&
-                fs.statSync(path.join(partialsRoot, filename))
-                .isFile();
-        })
-        .map(function (filename) {
+
+    var gotFiles = errto(cb, function (files) {
+        async.reduce(files, {}, function (partials, filename, next) {
             var filePath = path.join(partialsRoot, filename);
-            var template = rewriteComponentSource(filePath, fs.readFileSync(
-                filePath, 'utf-8'));
+            fs.readFile(filePath, 'utf-8', errto(next, function (
+                content) {
+                partials[filename.replace(htmlExtReg, '')
+                    .replace(/\/+/g, '.')] =
+                    rewriteComponentSource(filePath,
+                        content);
+                next(null, partials);
+            }));
+        }, cb);
+    });
 
-            return [
-                filename.replace(htmlExtReg, '')
-                .replace(/\/+/g, '.'),
-                template
-            ]; //TODO: production 优化，save parsed template
+    if (files) {
+        gotFiles(null, files);
+    } else {
+        fs.exists(partialsRoot, function (exists) {
+            if (!exists) {
+                cb(null, {});
+            } else {
+                glob('**/*.html', {
+                    cwd: partialsRoot
+                }, gotFiles);
+            }
+
         });
+    }
 
-    return zipObject(partialPairs);
 }
 
 function replaceLibJs(html, options) {
@@ -112,8 +123,7 @@ function replaceLibJs(html, options) {
     return html;
 }
 exports.engine = function (filePath, options, fn) {
-    try {
-        var template = fs.readFileSync(filePath, 'utf-8');
+    fs.readFile(filePath, 'utf-8', errto(fn, function (template) {
         template = rewrite({
             revPost: cRevPost('')
         }, template);
@@ -121,22 +131,32 @@ exports.engine = function (filePath, options, fn) {
         var partials = options.partials;
         var match = filePath.match(/\/ccc\/[^\/]+\/views\//);
         if (match) {
-            var componentRoot = (filePath.substring(0, match.index) + match[0])
+            var componentsRoot = (filePath.substring(0, match.index) +
+                match[0])
                 .replace(/\/views\/$/, '');
-            if (componentRoot !== options.settings.subAppRoot) {
-                assign(partials, getPartials(componentRoot));
+            if (componentsRoot !== options.settings.subAppRoot) {
+                getPartials(componentsRoot, errto(fn, function (
+                    conponentsPartials) {
+                    assign(partials, conponentsPartials);
+                    render();
+                }));
+            } else {
+                render();
             }
+        } else {
+            render();
         }
-        var html = new Ractive({
-            partials: partials,
-            template: template, //TODO: production 优化，cache
-            data: options
-        })
-            .toHTML();
-        fn(null, replaceLibJs(html, options));
-    } catch (err) {
-        fn(err);
-    }
+
+        function render() {
+            var html = new Ractive({
+                partials: partials,
+                template: template, //TODO: production 优化，cache
+                data: options
+            })
+                .toHTML();
+            fn(null, replaceLibJs(html, options));
+        }
+    }));
 };
 
 function getReqPath(req) {
@@ -198,23 +218,37 @@ exports.argmentApp = function (app, opts) {
             }
             assign(appLocals, this.app.locals);
 
-            var partials = {};
-            assign(partials, getPartials(this.app.set('appRoot')));
-            if (this.app.set('subAppRoot')) {
-                assign(partials, getPartials(this.app.set('subAppRoot')));
-            }
-            if (this.locals.partials) {
-                assign(partials, this.locals.partials);
-            }
-            if (options.partials) {
-                assign(partials, options.partials);
+            var partials;
+            var res = this;
+            getPartials(this.app.set('appRoot'), errto(fn, function (
+                appPartials) {
+                if (res.app.set('subAppRoot')) {
+                    getPartials(res.app.set('subAppRoot'), errto(
+                        fn, function (subAppPartials) {
+                            partials = assign(appPartials,
+                                subAppPartials);
+                            render();
+                        }));
+                } else {
+                    partials = appPartials;
+                    render();
+                }
+            }));
+
+            function render() {
+                if (res.locals.partials) {
+                    assign(partials, res.locals.partials);
+                }
+                if (options.partials) {
+                    assign(partials, options.partials);
+                }
+                options = assign({}, appLocals, res.locals, options, {
+                    partials: partials
+                });
+                res.locals = {};
+                _render.call(res, view, options, fn);
             }
 
-            options = assign({}, appLocals, this.locals, options, {
-                partials: partials
-            });
-            this.locals = {};
-            _render.call(this, view, options, fn);
         };
         next();
     });
