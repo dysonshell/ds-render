@@ -28,7 +28,7 @@ tape('when res.render() from sub-apps, solve components views first, ' +
             .expect(200)
             .end(function (err, res) {
                 test.notOk(err);
-                test.equal(res.text.trim(), 'partial in testc');
+                test.equal(res.text.trim(), '<!doctype html>partial in testc');
             });
     });
 
@@ -40,7 +40,7 @@ tape('res.render(otherViewPath) in sub-apps',
             .expect(200)
             .end(function (err, res) {
                 test.notOk(err);
-                test.equal(res.text.trim(), 'partial in testc');
+                test.equal(res.text.trim(), '<!doctype html>partial in testc');
             });
     });
 
@@ -52,6 +52,6 @@ tape('for auto solved viewPath, also include components partials',
             .expect(200)
             .end(function (err, res) {
                 test.notOk(err);
-                test.equal(res.text.trim(), 'partial in testc');
+                test.equal(res.text.trim(), '<!doctype html>partial in testc');
             });
     });

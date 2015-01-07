@@ -176,16 +176,7 @@ exports.middleware = function () {
         if (ext && ext !== '.html') {
             return next();
         }
-        return res.render(reqPath, function (err, str) {
-            if (err) {
-                if (err.message.indexOf('Failed to lookup view') === 0) {
-                    return next(); // 404
-                } else {
-                    return next(err);
-                }
-            }
-            res.send(str);
-        });
+        return res.render(reqPath);
     };
 };
 
@@ -201,11 +192,16 @@ exports.argmentApp = function (app, opts) {
             .map(unary(path.join.bind(path, opts.appRoot))))
         .filter(Boolean));
     app.use(function (req, res, next) {
+        if (Array.isArray(res.app.locals.rushHeads)) {
+            res.locals.rushHeads = res.app.locals.rushHeads.slice();
+        }
         var _render = res.render;
         // 让 res.viewPath 支持 express-promise
-        res.render = function (view, options, fn) {
-            if (!view) {
-                view = getReqPath(this.req);
+        res.render = function (name, options, fn) {
+            var res = this;
+            var app = res.app;
+            if (!name) {
+                name = getReqPath(this.req);
             }
             if ('function' === typeof options) {
                 fn = options;
@@ -213,22 +209,55 @@ exports.argmentApp = function (app, opts) {
             }
             options = options || {};
             var appLocals = {};
-            if (this.app.locals.__proto__) { // support sub-app, but not sub-sub-app
-                assign(appLocals, this.app.locals.__proto__);
+            if (app.locals.__proto__) { // support sub-app, but not sub-sub-app
+                assign(appLocals, app.locals.__proto__);
             }
-            assign(appLocals, this.app.locals);
+            assign(appLocals, app.locals);
+
+            var opts = assign({}, appLocals, res.locals, options);
+            var view;
+            var cache = app.cache;
+            // set .cache unless explicitly provided
+            opts.cache = opts.cache ? app.enabled('view cache') :
+                opts.cache;
+
+            view = (opts.cache && cache[name]) || new(app.get('view'))(name, {
+                defaultEngine: app.get('view engine'),
+                root: app.get('views'),
+                engines: app.engines
+            });
+
+            // default callback to respond
+            fn = fn || function (err, str) {
+                if (err) {
+                    return res.req.next(err);
+                }
+                res.end(str);
+            };
+
+            if (!view.path) {
+                return res.req.next();
+            }
+
+            res.statusCode = 200;
+            res.set('Content-Type', 'text/html; charset=utf-8');
+
+            var rushHeads = (res.locals.rushHeads || [])
+                .concat(options.rushHeads);
+
+            res.write('<!doctype html>' + rushHeads.join(''));
 
             var partials;
-            var res = this;
-            getPartials(this.app.set('appRoot'), errto(fn, function (
+            getPartials(app.set('appRoot'), errto(fn, function (
                 appPartials) {
                 if (res.app.set('subAppRoot')) {
-                    getPartials(res.app.set('subAppRoot'), errto(
-                        fn, function (subAppPartials) {
-                            partials = assign(appPartials,
-                                subAppPartials);
-                            render();
-                        }));
+                    getPartials(res.app.set('subAppRoot'),
+                        errto(
+                            fn, function (subAppPartials) {
+                                partials = assign(appPartials,
+                                    subAppPartials);
+                                render();
+                            }));
                 } else {
                     partials = appPartials;
                     render();
@@ -242,11 +271,9 @@ exports.argmentApp = function (app, opts) {
                 if (options.partials) {
                     assign(partials, options.partials);
                 }
-                options = assign({}, appLocals, res.locals, options, {
-                    partials: partials
-                });
+                opts.partials = partials;
                 res.locals = {};
-                _render.call(res, view, options, fn);
+                _render.call(res, view.path, opts, fn);
             }
 
         };

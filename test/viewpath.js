@@ -26,7 +26,7 @@ tape('partial/a', function (test) {
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), 'partial a');
+            test.equal(res.text.trim(), '<!doctype html>partial a');
         });
 });
 
@@ -38,6 +38,6 @@ tape('partial/b', function (test) {
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), 'partial a');
+            test.equal(res.text.trim(), '<!doctype html>partial a');
         });
 });
