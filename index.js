@@ -236,7 +236,7 @@ exports.argmentApp = function (app, opts) {
                 return res.req.next();
             }
 
-            var rushHeads = [].concat(app.locals.rushHeads)
+            var rushHeads = [].concat(appLocals.rushHeads)
                 .concat(res.locals.rushHeads)
                 .concat(options.rushHeads)
                 .filter(Boolean);
