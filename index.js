@@ -232,20 +232,23 @@ exports.argmentApp = function (app, opts) {
                 if (err) {
                     return res.req.next(err);
                 }
-                res.end(str);
+                res[res.headersSent ? 'end' : 'send'](str);
             };
 
             if (!view.path) {
                 return res.req.next();
             }
 
-            res.statusCode = 200;
-            res.set('Content-Type', 'text/html; charset=utf-8');
-
             var rushHeads = (res.locals.rushHeads || [])
-                .concat(options.rushHeads);
+                .concat(options.rushHeads)
+                .filter(Boolean);
 
-            res.write('<!doctype html>' + rushHeads.join(''));
+            if (rushHeads.length) {
+                res.statusCode = 200;
+                res.set('Content-Type', 'text/html; charset=utf-8');
+
+                res.write(rushHeads.join(''));
+            }
 
             var partials;
             getPartials(app.set('appRoot'), errto(fn, function (

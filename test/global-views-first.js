@@ -20,7 +20,7 @@ tape('when global view and components view name conflicts, ' +
             .expect(200)
             .end(function (err, res) {
                 test.notOk(err);
-                test.equal(res.text.trim(), '<!doctype html>partial a');
+                test.equal(res.text.trim(), 'partial a');
             });
     });
 
@@ -32,6 +32,6 @@ tape('also support res.viewPath, treat exactly like req.path',
             .expect(200)
             .end(function (err, res) {
                 test.notOk(err);
-                test.equal(res.text.trim(), '<!doctype html>partial a');
+                test.equal(res.text.trim(), 'partial a');
             });
     });

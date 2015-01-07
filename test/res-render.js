@@ -11,10 +11,9 @@ app.get('/b', function (req, res) {
 });
 app.get('/b_with_rushheads', function (req, res) {
     res.render('a', {
-        rushHeads: ['<meta nothing>']
+        rushHeads: ['<!doctype html>']
     });
 });
-
 app.use(require('../')
     .middleware());
 
@@ -25,7 +24,7 @@ tape('partial/a', function (test) {
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), '<!doctype html>partial a');
+            test.equal(res.text.trim(), 'partial a');
         });
 });
 
@@ -36,17 +35,17 @@ tape('partial/b', function (test) {
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), '<!doctype html>partial a');
+            test.equal(res.text.trim(), 'partial a');
         });
 });
 
-tape('partial/b with rushHeads', function (test) {
+tape('partial/b_with_rushheads', function (test) {
     test.plan(2);
     request(app)
         .get('/b_with_rushheads')
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), '<!doctype html><meta nothing>partial a');
+            test.equal(res.text.trim(), '<!doctype html>partial a');
         });
 });
