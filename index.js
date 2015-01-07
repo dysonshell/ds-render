@@ -192,9 +192,6 @@ exports.argmentApp = function (app, opts) {
             .map(unary(path.join.bind(path, opts.appRoot))))
         .filter(Boolean));
     app.use(function (req, res, next) {
-        if (Array.isArray(res.app.locals.rushHeads)) {
-            res.locals.rushHeads = res.app.locals.rushHeads.slice();
-        }
         var _render = res.render;
         // 让 res.viewPath 支持 express-promise
         res.render = function (name, options, fn) {
@@ -239,7 +236,8 @@ exports.argmentApp = function (app, opts) {
                 return res.req.next();
             }
 
-            var rushHeads = (res.locals.rushHeads || [])
+            var rushHeads = [].concat(app.locals.rushHeads)
+                .concat(res.locals.rushHeads)
                 .concat(options.rushHeads)
                 .filter(Boolean);
 
