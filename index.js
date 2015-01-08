@@ -181,6 +181,8 @@ exports.middleware = function () {
 };
 
 exports.argmentApp = function (app, opts) {
+    var revMap = opts.revMap;
+    var rewriter = require(path.join(opts.appRoot, 'rewriter'));
     app.set('view engine', 'html');
     app.engine('html', exports.engine);
     app.set('appRoot', opts.appRoot);
@@ -229,6 +231,9 @@ exports.argmentApp = function (app, opts) {
                 if (err) {
                     return res.req.next(err);
                 }
+                if (revMap) {
+                    str = rewriter(revMap, str);
+                }
                 res[res.headersSent ? 'end' : 'send'](str);
             };
 
@@ -244,11 +249,19 @@ exports.argmentApp = function (app, opts) {
             if (rushHeads.length) {
                 res.statusCode = 200;
                 res.set('Content-Type', 'text/html; charset=utf-8');
-
-                res.write(rushHeads.join(''));
+                var rushHeadsContents = rushHeads.join('');
+                if (revMap) {
+                    rushHeadsContents = rewriter(revMap,
+                        rushHeadsContents);
+                }
+                res.write(rushHeadsContents);
             }
 
             var partials;
+            if (view.partials) {
+                partials = view.partials;
+                return render();
+            }
             getPartials(app.set('appRoot'), errto(fn, function (
                 appPartials) {
                 if (res.app.set('subAppRoot')) {
@@ -266,6 +279,9 @@ exports.argmentApp = function (app, opts) {
             }));
 
             function render() {
+                if (opts.cache) {
+                    view.partials = partials;
+                }
                 if (res.locals.partials) {
                     assign(partials, res.locals.partials);
                 }
