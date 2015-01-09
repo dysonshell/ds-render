@@ -10,6 +10,7 @@ var errto = require('errto');
 var async = require('async');
 var rewrite = require('rev-rewriter');
 var assign = require('lodash-node/modern/objects/assign');
+var transform = require('lodash-node/modern/objects/transform');
 
 exports.getPartials = getPartials;
 exports.cRevPost = cRevPost;
@@ -82,81 +83,35 @@ function getPartials(appRoot, files, cb) { //TODO: production 优化，cache
 
         });
     }
-
 }
 
-function replaceLibJs(html, options) {
-    var settings = options.settings;
-    var appRoot = (settings || {})
-        .appRoot;
-
-    if (appRoot && settings.assetsDirName) {
-        var libs = [];
-        try {
-            libs = JSON.parse(fs.readFileSync(path.join(appRoot,
-                settings.assetsDirName,
-                'js',
-                'lib.json'), 'utf-8'));
-        } catch (err) {
-            if (err.code !== 'ENOENT') {
-                throw err;
-            }
-        }
-        libs = libs.map(function (lib) {
-            return path.resolve(path.join(appRoot,
-                'assets', 'js'), lib)
-                .substring(appRoot.length);
-        });
-        var libJsReplaced;
-        html = html.replace(
-            /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/g,
-            function (all, p1, p2) {
-                if (libJsReplaced) {
-                    return "";
-                } else {
-                    libJsReplaced = true;
-                    return p1 + libs.join(p2 + p1) +
-                        p2;
-                }
-            });
-    }
-    return html;
-}
 exports.engine = function (filePath, options, fn) {
+    var view = options.__view;
+    if (view) {
+        delete options.__view;
+    }
+    if (view.template) {
+        return render(view.template);
+    }
     fs.readFile(filePath, 'utf-8', errto(fn, function (template) {
         template = rewrite({
             revPost: cRevPost('')
         }, template);
         template = rewriteComponentSource(filePath, template);
-        var partials = options.partials;
-        var match = filePath.match(/\/ccc\/[^\/]+\/views\//);
-        if (match) {
-            var componentsRoot = (filePath.substring(0, match.index) +
-                match[0])
-                .replace(/\/views\/$/, '');
-            if (componentsRoot !== options.settings.subAppRoot) {
-                getPartials(componentsRoot, errto(fn, function (
-                    conponentsPartials) {
-                    assign(partials, conponentsPartials);
-                    render();
-                }));
-            } else {
-                render();
-            }
-        } else {
-            render();
-        }
-
-        function render() {
-            var html = new Ractive({
-                partials: partials,
-                template: template, //TODO: production 优化，cache
-                data: options
-            })
-                .toHTML();
-            fn(null, replaceLibJs(html, options));
-        }
+        template = Ractive.parse(template);
+        view.template = template;
+        render(template);
     }));
+
+    function render(template) {
+        var html = new Ractive({
+            partials: options.partials,
+            template: template, //TODO: production 优化，cache
+            data: options
+        })
+            .toHTML();
+        fn(null, html);
+    }
 };
 
 function getReqPath(req) {
@@ -181,8 +136,7 @@ exports.middleware = function () {
 };
 
 exports.argmentApp = function (app, opts) {
-    var revMap = opts.revMap;
-    var rewriter = require(path.join(opts.appRoot, 'rewriter'));
+    var rewriter = opts.rewriter;
     app.set('view engine', 'html');
     app.engine('html', exports.engine);
     app.set('appRoot', opts.appRoot);
@@ -201,7 +155,11 @@ exports.argmentApp = function (app, opts) {
             var app = res.app;
             if (!name) {
                 name = getReqPath(this.req);
+            } else if (typeof name !== 'string') {
+                options = name;
+                name = getReqPath(this.req);
             }
+
             if ('function' === typeof options) {
                 fn = options;
                 options = {};
@@ -220,19 +178,25 @@ exports.argmentApp = function (app, opts) {
             opts.cache = opts.cache ? app.enabled('view cache') :
                 opts.cache;
 
-            view = (opts.cache && cache[name]) || new(app.get('view'))(name, {
-                defaultEngine: app.get('view engine'),
-                root: app.get('views'),
-                engines: app.engines
-            });
+            function getView(viewPath) {
+                var View = app.get('view');
+                return (opts.cache && cache[viewPath]) || new View(viewPath, {
+                    defaultEngine: app.get('view engine'),
+                    root: app.get('views'),
+                    engines: app.engines
+                });
+            }
+
+            view = getView(name);
+            opts.__view = view;
 
             // default callback to respond
             fn = fn || function (err, str) {
                 if (err) {
                     return res.req.next(err);
                 }
-                if (revMap) {
-                    str = rewriter(revMap, str);
+                if (rewriter) {
+                    str = rewriter(str);
                 }
                 res[res.headersSent ? 'end' : 'send'](str);
             };
@@ -240,6 +204,7 @@ exports.argmentApp = function (app, opts) {
             if (!view.path) {
                 return res.req.next();
             }
+            view = getView(view.path);
 
             var rushHeads = [].concat(appLocals.rushHeads)
                 .concat(res.locals.rushHeads)
@@ -250,9 +215,8 @@ exports.argmentApp = function (app, opts) {
                 res.statusCode = 200;
                 res.set('Content-Type', 'text/html; charset=utf-8');
                 var rushHeadsContents = rushHeads.join('');
-                if (revMap) {
-                    rushHeadsContents = rewriter(revMap,
-                        rushHeadsContents);
+                if (rewriter) {
+                    rushHeadsContents = rewriter(rushHeadsContents);
                 }
                 res.write(rushHeadsContents);
             }
@@ -264,14 +228,19 @@ exports.argmentApp = function (app, opts) {
             }
             getPartials(app.set('appRoot'), errto(fn, function (
                 appPartials) {
-                if (res.app.set('subAppRoot')) {
-                    getPartials(res.app.set('subAppRoot'),
-                        errto(
-                            fn, function (subAppPartials) {
-                                partials = assign(appPartials,
-                                    subAppPartials);
-                                render();
-                            }));
+                var match = view.path.match(
+                    /\/ccc\/[^\/]+\/views\//);
+                if (match) {
+                    var componentsRoot = (view.path.substring(0,
+                        match.index) + match[0])
+                        .replace(/\/views\/$/, '');
+                    getPartials(componentsRoot, errto(fn, function (
+                        conponentsPartials) {
+                        partials = assign(
+                            appPartials,
+                            conponentsPartials);
+                        render();
+                    }));
                 } else {
                     partials = appPartials;
                     render();
@@ -280,7 +249,10 @@ exports.argmentApp = function (app, opts) {
 
             function render() {
                 if (opts.cache) {
-                    view.partials = partials;
+                    view.partials = transform(partials, function (
+                        result, partial, name) {
+                        result[name] = Ractive.parse(partial);
+                    }, {});
                 }
                 if (res.locals.partials) {
                     assign(partials, res.locals.partials);
