@@ -149,6 +149,7 @@ exports.argmentApp = function (app, opts) {
         .filter(Boolean));
     app.use(function (req, res, next) {
         var _render = res.render;
+        var noMediaQueries = res.locals.noMediaQueries;
         // 让 res.viewPath 支持 express-promise
         res.render = function (name, options, fn) {
             var res = this;
@@ -196,7 +197,7 @@ exports.argmentApp = function (app, opts) {
                     return res.req.next(err);
                 }
                 if (rewriter) {
-                    str = rewriter(str);
+                    str = rewriter(str, noMediaQueries);
                 }
                 res[res.headersSent ? 'end' : 'send'](str);
             };
@@ -216,7 +217,7 @@ exports.argmentApp = function (app, opts) {
                 res.set('Content-Type', 'text/html; charset=utf-8');
                 var rushHeadsContents = rushHeads.join('');
                 if (rewriter) {
-                    rushHeadsContents = rewriter(rushHeadsContents);
+                    rushHeadsContents = rewriter(rushHeadsContents, noMediaQueries);
                 }
                 res.write(rushHeadsContents);
             }
