@@ -4,6 +4,7 @@ var htmlExtReg = /\.html$/i;
 var path = require('path');
 var fs = require('fs');
 var env = process.env.NODE_ENV || 'development';
+var rewriteComponentSource = require('@ds/rewrite-component-source');
 var glob = require('glob');
 var unary = require('fn-unary');
 var errto = require('errto');
@@ -13,40 +14,6 @@ var assign = require('lodash-node/modern/objects/assign');
 var transform = require('lodash-node/modern/objects/transform');
 
 exports.getPartials = getPartials;
-exports.cRevPost = cRevPost;
-exports.rewriteComponentSource = rewriteComponentSource;
-
-function cRevPost(component) {
-    component = component || '';
-    return function (assetFilePath) {
-        var prefix = component ? {
-            '.js': '/js/',
-            '.css': '/css/'
-        }[path.extname(assetFilePath)] || '/img/' : '/assets/';
-        return component + prefix + assetFilePath;
-    };
-}
-
-function rewriteComponentSource(filePath, source) {
-    var index, component;
-    if ((index = filePath.indexOf('/ccc/')) > -1) {
-        component = filePath.match(/\/ccc\/[^\/]+/)[0];
-        source = rewrite({
-            assetPathPrefix: '/js/',
-            revPost: cRevPost(component)
-        }, source);
-        source = rewrite({
-            assetPathPrefix: '/css/',
-            revPost: cRevPost(component)
-        }, source);
-        source = rewrite({
-            assetPathPrefix: '/img/',
-            revPost: cRevPost(component)
-        }, source);
-        return source;
-    }
-    return source;
-}
 
 function getPartials(appRoot, files, cb) { //TODO: production 优化，cache
     var partialsRoot = path.join(appRoot, 'partials');
@@ -94,9 +61,6 @@ exports.engine = function (filePath, options, fn) {
         return render(view.template);
     }
     fs.readFile(filePath, 'utf-8', errto(fn, function (template) {
-        template = rewrite({
-            revPost: cRevPost('')
-        }, template);
         template = rewriteComponentSource(filePath, template);
         template = Ractive.parse(template);
         view.template = template;
