@@ -29,8 +29,7 @@ function getPartials(appRoot, files, cb) { //TODO: production 优化，cache
                 content) {
                 partials[filename.replace(htmlExtReg, '')
                     .replace(/\/+/g, '.')] =
-                    rewriteComponentSource(filePath,
-                        content);
+                    rewriteComponentSource(filePath, content);
                 next(null, partials);
             }));
         }, cb);
@@ -113,7 +112,9 @@ exports.argmentApp = function (app, opts) {
         .filter(Boolean));
     app.use(function (req, res, next) {
         var _render = res.render;
-        var noMediaQueries = res.locals.noMediaQueries;
+        var noMediaQueries =
+            defaultCallback.noMediaQueries =
+            res.locals.noMediaQueries;
         // 让 res.viewPath 支持 express-promise
         res.render = function (name, options, fn) {
             var res = this;
@@ -156,16 +157,7 @@ exports.argmentApp = function (app, opts) {
             opts.__view = view;
 
             // default callback to respond
-            fn = fn || function (err, str) {
-                if (err) {
-                    return res.req.next(err);
-                }
-                if (rewriter) {
-                    str = rewriter(str, noMediaQueries);
-                }
-                res[res.headersSent ? 'end' : 'send'](str);
-            };
-
+            fn = fn || defaultCallback;
             if (!view.path) {
                 return res.req.next();
             }
@@ -196,8 +188,8 @@ exports.argmentApp = function (app, opts) {
                 var match = view.path.match(
                     /\/ccc\/[^\/]+\/views\//);
                 if (match) {
-                    var componentsRoot = (view.path.substring(0,
-                        match.index) + match[0])
+                    var componentsRoot =
+                        (view.path.substring(0, match.index) + match[0])
                         .replace(/\/views\/$/, '');
                     getPartials(componentsRoot, errto(fn, function (
                         conponentsPartials) {
@@ -231,6 +223,18 @@ exports.argmentApp = function (app, opts) {
             }
 
         };
+        res.render.defaultCallback = defaultCallback;
+
+        function defaultCallback(err, str) {
+            if (err) {
+                return res.req.next(err);
+            }
+            if (rewriter) {
+                str = rewriter(str, defaultCallback.noMediaQueries);
+            }
+            res[res.headersSent ? 'end' : 'send'](str);
+        };
+
         next();
     });
     if (opts.appendMiddleware !== false) {
