@@ -4,48 +4,16 @@ var htmlExtReg = /\.html$/i;
 var path = require('path');
 var fs = require('fs');
 var env = process.env.NODE_ENV || 'development';
+var rewriteComponentSource = require('@ds/rewrite-component-source');
 var glob = require('glob');
 var unary = require('fn-unary');
 var errto = require('errto');
 var async = require('async');
 var rewrite = require('rev-rewriter');
 var assign = require('lodash-node/modern/objects/assign');
+var transform = require('lodash-node/modern/objects/transform');
 
 exports.getPartials = getPartials;
-exports.cRevPost = cRevPost;
-exports.rewriteComponentSource = rewriteComponentSource;
-
-function cRevPost(component) {
-    component = component || '';
-    return function (assetFilePath) {
-        var prefix = component ? {
-            '.js': '/js/',
-            '.css': '/css/'
-        }[path.extname(assetFilePath)] || '/img/' : '/assets/';
-        return component + prefix + assetFilePath;
-    };
-}
-
-function rewriteComponentSource(filePath, source) {
-    var index, component;
-    if ((index = filePath.indexOf('/ccc/')) > -1) {
-        component = filePath.match(/\/ccc\/[^\/]+/)[0];
-        source = rewrite({
-            assetPathPrefix: '/js/',
-            revPost: cRevPost(component)
-        }, source);
-        source = rewrite({
-            assetPathPrefix: '/css/',
-            revPost: cRevPost(component)
-        }, source);
-        source = rewrite({
-            assetPathPrefix: '/img/',
-            revPost: cRevPost(component)
-        }, source);
-        return source;
-    }
-    return source;
-}
 
 function getPartials(appRoot, files, cb) { //TODO: production 优化，cache
     var partialsRoot = path.join(appRoot, 'partials');
@@ -61,8 +29,7 @@ function getPartials(appRoot, files, cb) { //TODO: production 优化，cache
                 content) {
                 partials[filename.replace(htmlExtReg, '')
                     .replace(/\/+/g, '.')] =
-                    rewriteComponentSource(filePath,
-                        content);
+                    rewriteComponentSource(filePath, content);
                 next(null, partials);
             }));
         }, cb);
@@ -82,81 +49,32 @@ function getPartials(appRoot, files, cb) { //TODO: production 优化，cache
 
         });
     }
-
 }
 
-function replaceLibJs(html, options) {
-    var settings = options.settings;
-    var appRoot = (settings || {})
-        .appRoot;
-
-    if (appRoot && settings.assetsDirName) {
-        var libs = [];
-        try {
-            libs = JSON.parse(fs.readFileSync(path.join(appRoot,
-                settings.assetsDirName,
-                'js',
-                'lib.json'), 'utf-8'));
-        } catch (err) {
-            if (err.code !== 'ENOENT') {
-                throw err;
-            }
-        }
-        libs = libs.map(function (lib) {
-            return path.resolve(path.join(appRoot,
-                'assets', 'js'), lib)
-                .substring(appRoot.length);
-        });
-        var libJsReplaced;
-        html = html.replace(
-            /(<script\s+src=["']?)\/assets\/js\/lib.js(["']?><\/script>)/g,
-            function (all, p1, p2) {
-                if (libJsReplaced) {
-                    return "";
-                } else {
-                    libJsReplaced = true;
-                    return p1 + libs.join(p2 + p1) +
-                        p2;
-                }
-            });
-    }
-    return html;
-}
 exports.engine = function (filePath, options, fn) {
+    var view = options.__view;
+    if (view) {
+        delete options.__view;
+    }
+    if (view.template) {
+        return render(view.template);
+    }
     fs.readFile(filePath, 'utf-8', errto(fn, function (template) {
-        template = rewrite({
-            revPost: cRevPost('')
-        }, template);
         template = rewriteComponentSource(filePath, template);
-        var partials = options.partials;
-        var match = filePath.match(/\/ccc\/[^\/]+\/views\//);
-        if (match) {
-            var componentsRoot = (filePath.substring(0, match.index) +
-                match[0])
-                .replace(/\/views\/$/, '');
-            if (componentsRoot !== options.settings.subAppRoot) {
-                getPartials(componentsRoot, errto(fn, function (
-                    conponentsPartials) {
-                    assign(partials, conponentsPartials);
-                    render();
-                }));
-            } else {
-                render();
-            }
-        } else {
-            render();
-        }
-
-        function render() {
-            var html = new Ractive({
-                partials: partials,
-                template: template, //TODO: production 优化，cache
-                data: options
-            })
-                .toHTML();
-            fn(null, replaceLibJs(html, options));
-        }
+        template = Ractive.parse(template);
+        view.template = template;
+        render(template);
     }));
+
+    function render(template) {
+        var html = new Ractive({
+            partials: options.partials,
+            template: template, //TODO: production 优化，cache
+            data: options
+        })
+            .toHTML();
+        fn(null, html);
+    }
 };
 
 function getReqPath(req) {
@@ -176,20 +94,12 @@ exports.middleware = function () {
         if (ext && ext !== '.html') {
             return next();
         }
-        return res.render(reqPath, function (err, str) {
-            if (err) {
-                if (err.message.indexOf('Failed to lookup view') === 0) {
-                    return next(); // 404
-                } else {
-                    return next(err);
-                }
-            }
-            res.send(str);
-        });
+        return res.render(reqPath);
     };
 };
 
 exports.argmentApp = function (app, opts) {
+    var rewriter = opts.rewriter;
     app.set('view engine', 'html');
     app.engine('html', exports.engine);
     app.set('appRoot', opts.appRoot);
@@ -202,33 +112,92 @@ exports.argmentApp = function (app, opts) {
         .filter(Boolean));
     app.use(function (req, res, next) {
         var _render = res.render;
+        var noMediaQueries =
+            defaultCallback.noMediaQueries =
+            res.locals.noMediaQueries;
         // 让 res.viewPath 支持 express-promise
-        res.render = function (view, options, fn) {
-            if (!view) {
-                view = getReqPath(this.req);
+        res.render = function (name, options, fn) {
+            var res = this;
+            var app = res.app;
+            if (!name) {
+                name = getReqPath(this.req);
+            } else if (typeof name !== 'string') {
+                options = name;
+                name = getReqPath(this.req);
             }
+
             if ('function' === typeof options) {
                 fn = options;
                 options = {};
             }
             options = options || {};
             var appLocals = {};
-            if (this.app.locals.__proto__) { // support sub-app, but not sub-sub-app
-                assign(appLocals, this.app.locals.__proto__);
+            if (app.locals.__proto__) { // support sub-app, but not sub-sub-app
+                assign(appLocals, app.locals.__proto__);
             }
-            assign(appLocals, this.app.locals);
+            assign(appLocals, app.locals);
+
+            var opts = assign({}, appLocals, res.locals, options);
+            var view;
+            var cache = app.cache;
+            // set .cache unless explicitly provided
+            opts.cache = opts.cache ? app.enabled('view cache') :
+                opts.cache;
+
+            function getView(viewPath) {
+                var View = app.get('view');
+                return (opts.cache && cache[viewPath]) || new View(viewPath, {
+                    defaultEngine: app.get('view engine'),
+                    root: app.get('views'),
+                    engines: app.engines
+                });
+            }
+
+            view = getView(name);
+            opts.__view = view;
+
+            // default callback to respond
+            fn = fn || defaultCallback;
+            if (!view.path) {
+                return res.req.next();
+            }
+            view = getView(view.path);
+
+            var rushHeads = [].concat(appLocals.rushHeads)
+                .concat(res.locals.rushHeads)
+                .concat(options.rushHeads)
+                .filter(Boolean);
+
+            if (rushHeads.length) {
+                res.statusCode = 200;
+                res.set('Content-Type', 'text/html; charset=utf-8');
+                var rushHeadsContents = rushHeads.join('');
+                if (rewriter) {
+                    rushHeadsContents = rewriter(rushHeadsContents, noMediaQueries);
+                }
+                res.write(rushHeadsContents);
+            }
 
             var partials;
-            var res = this;
-            getPartials(this.app.set('appRoot'), errto(fn, function (
+            if (view.partials) {
+                partials = view.partials;
+                return render();
+            }
+            getPartials(app.set('appRoot'), errto(fn, function (
                 appPartials) {
-                if (res.app.set('subAppRoot')) {
-                    getPartials(res.app.set('subAppRoot'), errto(
-                        fn, function (subAppPartials) {
-                            partials = assign(appPartials,
-                                subAppPartials);
-                            render();
-                        }));
+                var match = view.path.match(
+                    /\/ccc\/[^\/]+\/views\//);
+                if (match) {
+                    var componentsRoot =
+                        (view.path.substring(0, match.index) + match[0])
+                        .replace(/\/views\/$/, '');
+                    getPartials(componentsRoot, errto(fn, function (
+                        conponentsPartials) {
+                        partials = assign(
+                            appPartials,
+                            conponentsPartials);
+                        render();
+                    }));
                 } else {
                     partials = appPartials;
                     render();
@@ -236,20 +205,36 @@ exports.argmentApp = function (app, opts) {
             }));
 
             function render() {
+                if (opts.cache) {
+                    view.partials = transform(partials, function (
+                        result, partial, name) {
+                        result[name] = Ractive.parse(partial);
+                    }, {});
+                }
                 if (res.locals.partials) {
                     assign(partials, res.locals.partials);
                 }
                 if (options.partials) {
                     assign(partials, options.partials);
                 }
-                options = assign({}, appLocals, res.locals, options, {
-                    partials: partials
-                });
+                opts.partials = partials;
                 res.locals = {};
-                _render.call(res, view, options, fn);
+                _render.call(res, view.path, opts, fn);
             }
 
         };
+        res.render.defaultCallback = defaultCallback;
+
+        function defaultCallback(err, str) {
+            if (err) {
+                return res.req.next(err);
+            }
+            if (rewriter) {
+                str = rewriter(str, defaultCallback.noMediaQueries);
+            }
+            res[res.headersSent ? 'end' : 'send'](str);
+        };
+
         next();
     });
     if (opts.appendMiddleware !== false) {
