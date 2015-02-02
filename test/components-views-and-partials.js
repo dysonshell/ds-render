@@ -4,7 +4,8 @@ var app = require('./example')();
 var request = require('supertest');
 
 var path = require('path');
-var subApp = require('@ds/base').createSubApp(path.join(__dirname, 'example', 'ccc', 'testc'));
+var subApp = require('@ds/base').createSubApp(path.join(__dirname, 'example', 'ccc',
+    'testc'));
 
 subApp.get('/ccc', function (req, res) {
     res.render();
