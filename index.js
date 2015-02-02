@@ -131,7 +131,7 @@ exports.middleware = function () {
 exports.argmentApp = function (app, opts) {
     app.set('view engine', 'html');
     app.engine('html', function (viewPath, options, fn) {
-        renderView(getView(app, viewPath, getCache()), options)
+        renderView(getView(app, viewPath, getCache(app)), options)
             .then(function (html) {
                 fn(null, html);
             }).catch(function (err) {
@@ -148,7 +148,7 @@ exports.argmentApp = function (app, opts) {
 
     var View = app.get('view');
 
-    function getCache() {
+    function getCache(app) {
         return app.enabled('view cache') && app.cache || (app.cache = {});
     }
 
@@ -186,7 +186,7 @@ exports.argmentApp = function (app, opts) {
         }
         assign(appLocals, app.locals);
 
-        var view = getView(app, name, getCache());
+        var view = getView(app, name, getCache(app));
         var opts = assign({}, appLocals, res.locals, options);
 
         return renderView(view, opts);
