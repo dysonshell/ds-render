@@ -43,8 +43,6 @@ function getPartials(appRoot, viewPath) {
             }, {});
             resolve(componentsRoot ?
                 getPartials(componentsRoot).then(function (cp) {
-                    console.log(cp);
-                    console.log(partials);
                     return Promise.props(assign({}, partials, cp));
                 }) :
                 Promise.props(partials));
@@ -74,30 +72,35 @@ function getParsedTemplate(filePath) {
         });
 }
 
-exports.renderView = renderView;
+exports.preRenderView = preRenderView;
 
-function renderView(view, options) {
+function preRenderView(view) {
     if (!view.path) {
-        return Promise.resolve('');
+        return Promise.resolve({});
+    }
+    if (view.template && view.partials) {
+        return Promise.resolve(view);
     }
     var appRoot = view.path.substring(0, Math.min(
         view.path.indexOf('/ccc/') + 1 || Infinity,
         view.path.indexOf('/views/') + 1 || Infinity) - 1);
-    console.log('ar', appRoot);
-    return (view.template && view.partials ?
-        Promise.resolve() :
-        Promise.join(
-            getParsedTemplate(view.path),
-            getPartials(appRoot, view.path),
-            function (template, partials) {
-                console.log(JSON.stringify(arguments, null, '  '));
-                view.template = template;
-                view.partials = partials;
-                return view;
-            })
-    ).then(function () {
-        return toHTML(view.template, view.partials, options);
-    });
+    return Promise.props({
+        template: getParsedTemplate(view.path),
+        partials: getPartials(appRoot, view.path)
+    })
+        .then(assign.bind(null, view));
+}
+
+exports.renderView = renderView;
+
+function renderView(view, options) {
+    return preRenderView(view)
+        .then(function (obj) {
+            if (!view.path) {
+                return Promise.resolve('');
+            }
+            return toHTML(view.template, view.partials, options);
+        });
 }
 
 function toHTML(template, partials, options) {
@@ -165,10 +168,32 @@ exports.argmentApp = function (app, opts) {
         if (cache && view.path) {
             cache[viewPath] = cache[view.path] = view;
         }
-        console.log(view);
         return view;
     }
 
+    app.response.preRenderView = function (name) {
+        var res = this;
+        if (!name) {
+            name = getViewPath(res);
+        }
+        return preRenderView(getView(res.app, name, getCache(res.app)));
+    };
+    app.response.preRenderLocals = function (options) {
+        var res = this;
+        var app = res.app;
+        options = options || {};
+
+        var appLocals = {};
+        if (app.locals.__proto__) { // import from parent-app, but not ancestor-app
+            assign(appLocals, app.locals.__proto__);
+        }
+        assign(appLocals, app.locals);
+
+        return Promise.props(assign(options, res.locals))
+            .then(function (options) {
+                return assign(appLocals, options);
+            })
+    };
     app.response.rendr = function (name, options) {
         var res = this;
         var app = res.app;
@@ -178,18 +203,12 @@ exports.argmentApp = function (app, opts) {
             options = name;
             name = getViewPath(res);
         }
-
         options = options || {};
-        var appLocals = {};
-        if (app.locals.__proto__) { // support sub-app, but not sub-sub-app
-            assign(appLocals, app.locals.__proto__);
-        }
-        assign(appLocals, app.locals);
 
-        var view = getView(app, name, getCache(app));
-        var opts = assign({}, appLocals, res.locals, options);
-
-        return renderView(view, opts);
+        return Promise.join(
+            res.preRenderView(name),
+            res.preRenderLocals(options),
+            renderView);
     };
     app.response.render = function () {
         var res = this;
