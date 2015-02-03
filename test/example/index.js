@@ -3,8 +3,8 @@ module.exports = function () {
     var app = require('@ds/base')
         .createApp(__dirname);
 
-    require('../../')
-        .argmentApp(app, {
+    app.dsRenderMiddleware = require('../../')
+        .augmentApp(app, {
             appendMiddleware: false,
             appRoot: __dirname,
             assetsDirName: 'assets',

@@ -8,8 +8,7 @@ app.get('/cccc', function (req, res, next) {
     next();
 });
 
-app.use(require('../')
-    .middleware());
+app.use(app.dsRenderMiddleware);
 
 tape('when global view and components view name conflicts, ' +
     'solve to global view.',

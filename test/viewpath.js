@@ -9,15 +9,7 @@ app.get('/b', function (req, res, next) {
     next();
 });
 
-app.use(require('../')
-    .middleware());
-
-require('../')
-    .argmentApp(app, {
-        appRoot: path.join(__dirname, 'example'),
-        assetsDirName: 'assets',
-        viewsDirName: 'views'
-    });
+app.use(app.dsRenderMiddleware);
 
 tape('partial/a', function (test) {
     test.plan(2);

@@ -1,6 +1,6 @@
 {
   "name": "@ds/render",
-  "version": "0.5.3",
+  "version": "0.6.1",
   "description": "render module for dysonshell",
   "main": "index.js",
   "files": [
@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@ds/rewrite-component-source": "^0.1.0",
-    "async": "^0.9.0",
+    "bluebird": "^2.9.5",
     "errto": "^0.2.1",
     "fn-unary": "^1.0.0",
     "glob": "^4.3.1",

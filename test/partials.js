@@ -3,8 +3,7 @@ var tape = require('tape');
 var app = require('./example')();
 var request = require('supertest');
 
-app.use(require('../')
-    .middleware());
+app.use(app.dsRenderMiddleware);
 
 tape('partial/a', function (test) {
     test.plan(2);
