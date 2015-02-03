@@ -4,7 +4,8 @@ var app = require('./example')();
 var request = require('supertest');
 
 var path = require('path');
-var subApp = require('@ds/base').createSubApp(path.join(__dirname, 'example', 'ccc',
+var subApp = require('@ds/base').createSubApp(path.join(__dirname, 'example',
+    'ccc',
     'testc'));
 
 subApp.get('/ccc', function (req, res) {
@@ -17,8 +18,7 @@ subApp.get('/cccc', function (req, res) {
 
 app.use(subApp);
 
-app.use(require('../')
-    .middleware());
+app.use(app.dsRenderMiddleware);
 
 tape('when res.render() from sub-apps, solve components views first, ' +
     'and including components partials.',

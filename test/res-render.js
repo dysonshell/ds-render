@@ -9,8 +9,7 @@ app.get('/a', function (req, res) {
 app.get('/b', function (req, res) {
     res.render('a');
 });
-app.use(require('../')
-    .middleware());
+app.use(app.dsRenderMiddleware);
 
 tape('partial/a', function (test) {
     test.plan(2);

@@ -1,4 +1,5 @@
 'use strict';
+var assert = require('assert');
 var Ractive = require('ractive');
 var htmlExtReg = /\.html$/i;
 var path = require('path');
@@ -12,12 +13,12 @@ var Promise = require('bluebird');
 
 var readFile = Promise.promisify(require("fs").readFile);
 
-exports.getPartials = getPartials;
+exports.getParsedPartials = getParsedPartials;
 
-function getPartials(appRoot, viewPath) {
+function getParsedPartials(appRoot, viewPath) {
     var partialsRoot = path.join(appRoot, 'partials');
     var componentsRoot;
-    var match = (viewPath || '').match(/\/ccc\/[^\/]+\/views\//);
+    var match = (viewPath || '').match(/\/@?ccc\/[^\/]+\/views\//);
     if (match) {
         componentsRoot =
             (viewPath.substring(0, match.index) + match[0])
@@ -42,7 +43,7 @@ function getPartials(appRoot, viewPath) {
                 return p;
             }, {});
             resolve(componentsRoot ?
-                getPartials(componentsRoot).then(function (cp) {
+                getParsedPartials(componentsRoot).then(function (cp) {
                     return Promise.props(assign({}, partials, cp));
                 }) :
                 Promise.props(partials));
@@ -82,11 +83,12 @@ function preRenderView(view) {
         return Promise.resolve(view);
     }
     var appRoot = view.path.substring(0, Math.min(
+        view.path.indexOf('/node_modules/@ccc/') + 1 || Infinity,
         view.path.indexOf('/ccc/') + 1 || Infinity,
         view.path.indexOf('/views/') + 1 || Infinity) - 1);
     return Promise.props({
         template: getParsedTemplate(view.path),
-        partials: getPartials(appRoot, view.path)
+        partials: getParsedPartials(appRoot, view.path)
     })
         .then(assign.bind(null, view));
 }
@@ -111,27 +113,8 @@ function toHTML(template, partials, options) {
     })).toHTML();
 }
 
-exports.getViewPath = getViewPath;
-
-function getViewPath(res) {
-    return (res.viewPath || res.req.path).replace(/^\/|\/$/g, '');
-}
-
-exports.middleware = function () {
-    return function (req, res, next) {
-        var ext = path.extname(req.path);
-        if (ext && ext !== '.html') {
-            return next();
-        }
-        return res.rendr()
-            .then(function (html) {
-                res.send(html)
-            })
-            .catch(next);
-    };
-};
-
-exports.argmentApp = function (app, opts) {
+exports.augmentApp = function (app, opts) {
+    assert(opts.appRoot);
     app.set('view engine', 'html');
     app.engine('html', function (viewPath, options, fn) {
         renderView(getView(app, viewPath, getCache(app)), options)
@@ -141,15 +124,21 @@ exports.argmentApp = function (app, opts) {
                 fn(err);
             });
     });
-    app.set('appRoot', opts.appRoot);
     app.set('views', [].concat(app.get('views'))
-        .concat(glob.sync('ccc/*/views/', {
-                cwd: opts.appRoot
-            })
+        .concat((glob.sync('ccc/*/views/', {
+                    cwd: opts.appRoot
+                })
+                .concat(glob.sync('node_modules/@ccc/*/views/', {
+                    cwd: opts.appRoot
+                })))
             .map(unary(path.join.bind(path, opts.appRoot))))
         .filter(Boolean));
 
     var View = app.get('view');
+
+    function getViewPath(res) {
+        return (res.viewPath || res.req.path).replace(/^\/|\/$/g, '');
+    }
 
     function getCache(app) {
         return app.enabled('view cache') && app.cache || (app.cache = {});
@@ -178,6 +167,7 @@ exports.argmentApp = function (app, opts) {
         }
         return preRenderView(getView(res.app, name, getCache(res.app)));
     };
+
     app.response.preRenderLocals = function (options) {
         var res = this;
         var app = res.app;
@@ -194,6 +184,7 @@ exports.argmentApp = function (app, opts) {
                 return assign(appLocals, options);
             })
     };
+
     app.response.rendr = function (name, options) {
         var res = this;
         var app = res.app;
@@ -210,16 +201,35 @@ exports.argmentApp = function (app, opts) {
             res.preRenderLocals(options),
             renderView);
     };
+
     app.response.render = function () {
         var res = this;
+        var fn = arguments[arguments.length - 1];
+        if (typeof fn !== 'function') {
+            fn = errto(res.req.next, function (html) {
+                res.send(html);
+            });
+        }
         res.rendr.apply(this, arguments)
+            .then(fn.bind(null, null))
+            .catch(fn);
+    };
+
+    var middleware = function (req, res, next) {
+        var ext = path.extname(req.path);
+        if (ext && ext !== '.html') {
+            return next();
+        }
+        return res.rendr()
             .then(function (html) {
                 res.send(html)
             })
-            .catch(res.req.next);
+            .catch(next);
     };
 
-    if (opts.appendMiddleware !== false) {
-        app.use(exports.middleware());
+    if (opts.appendMiddleware) {
+        app.use(middleware);
     }
+
+    return middleware;
 };
