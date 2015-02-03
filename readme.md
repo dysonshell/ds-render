@@ -30,7 +30,7 @@ var dsRenderMiddleware = dsRender.augmentApp(app, {
 }
 ```
 
-如果把可选的 `viewPath` 给出如 `#{appRoot}/ccc/account/views/home.html` 则会到组件的根目录查找 partials，如存在 `#{appRoot}/ccc/account/partials/ac.html` 返回的对象会有 ac 这个 parsed partial，如果同时存在 `#{appRoot}/partials/ac.html` 和 `#{appRoot}/ccc/account/partials/ac.html`，以组件的 partial 为优先。
+如果把可选的 `viewPath` 给出如 `#{appRoot}/ccc/account/views/home.html` 则会到 `#{componentRoot}/partials`（#{componentRoot} 表示组件的根目录，本例中就是 `#{appRoot}/ccc/account/`）查找 partials，如存在 `#{appRoot}/ccc/account/partials/ac.html` 返回的对象会有 ac 这个 parsed partial，如果同时存在 `#{appRoot}/partials/ac.html` 和 `#{appRoot}/ccc/account/partials/ac.html`，以组件的 partial 为优先。
 
 ### `dsRender.getParsedTemplate(filePath)`
 
@@ -38,18 +38,30 @@ var dsRenderMiddleware = dsRender.augmentApp(app, {
 
 以上两个方法是 `@ds/render` 的基础，返回的模板都会做资源路径的替换。
 
-### dsRender.augmentApp(app, opts)
+### `dsRender.augmentApp(app, opts)`
 
 用法在最前面，使用后，express middleware 里面的 res 对象会添加下列方法：
 
-#### res.preRenderView(name)
+#### `res.preRenderView(name)`
 会先到 `#{componentRoot}/views` 再到 `#{appRoot}/views` 查找模板文件，返回的 view 对象（promise）中有 `view.template` 和 `view.partials`。
 
-#### res.preRenderLocals(locals)
-组合 `app.locals` (全局模板变量) `app.locals.__proto__` (父 app 的全局模板变量) res.locals 和这里给进的 locals，接受 promise，返回的是 promise
+#### `res.preRenderLocals(locals)`
+组合 `app.locals` (全局模板变量) `app.locals.__proto__` (父 app 的全局模板变量) res.locals 和这里给进的 locals，locals 对象里的值可以是 promise 如
 
-#### res.rendr(name, locals)
+```javascript
+{
+    a: promiseA,
+    b: promiseB, // 第一层的 promise 会自动解决
+    c: {
+        pc: promiseInC // 这里的 promise 不会自动解决了
+    }
+}
+```
+
+返回的是 promise
+
+#### `res.rendr(name, locals)`
 使用前面两个方法生成 html，返回的是 promise
 
-#### res.render(name, locals, fn)
+#### `res.render(name, locals, fn)`
 覆盖（overwrite）了 express 里面的 `res.render()` 方法。
