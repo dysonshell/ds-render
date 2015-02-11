@@ -38,6 +38,6 @@
     "rev-rewriter": "^1.1.0"
   },
   "engines": {
-    "iojs": "^1.0.0"
+    "node": "^1.0.0"
   }
 }
