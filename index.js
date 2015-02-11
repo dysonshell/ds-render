@@ -8,7 +8,7 @@ var rewriteComponentSource = require('@ds/rewrite-component-source');
 var glob = require('glob');
 var unary = require('fn-unary');
 var errto = require('errto');
-var assign = require('lodash-node/modern/objects/assign');
+var assign = require('lodash-node/modern/object/assign');
 var Promise = require('bluebird');
 
 var readFile = Promise.promisify(require("fs").readFile);
