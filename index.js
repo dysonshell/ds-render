@@ -6,53 +6,48 @@ var htmlExtReg = /\.html$/i;
 var path = require('path');
 var glob = require('glob');
 var unary = require('fn-unary');
+var co = require('co');
 var errto = require('errto');
 
 var readFile = Promise.promisify(require("fs").readFile);
 
+function exists(filePath) {
+    return new Promise(function (resolve) {
+        fs.exists(filePath, resolve);
+    });
+}
+
 exports.getParsedPartials = getParsedPartials;
 
-function getParsedPartials(appRoot, viewPath) {
-    var partialsRoot = path.join(appRoot, 'partials');
-    var componentsRoot;
-    var match = (viewPath || '').match(/\/@?ccc\/[^\/]+\/views\//);
-    if (match) {
-        componentsRoot =
-            (viewPath.substring(0, match.index) + match[0])
-            .replace(/\/views\/$/, '');
+function getParsedPartials(viewPath) {
+    var match = (viewPath || '').match(/\/(ccc|node_modules\/@ccc)(\/[^\/]+\/)views\//);
+    if (!match) {
+        return Promise.reject(new Error('viewPath should be in ccc/*/views/ or node_modules/@ccc/*/views/'));
     }
+    var cccPartialsRoot = viewPath.substring(0, match.index) + '/ccc' + match[2] + '/partials';
+    var moduleCccPartialsRoot = viewPath.substring(0, match.index) + '/node_modules/@ccc' + match[2] + '/partials';
 
-    return new Promise(function (resolve, reject) {
-        var gotFiles = errto(reject, function (files) {
-            var partials = files.reduce(function (p, filename) {
-                var filePath = path.join(partialsRoot,
-                    filename);
-                var partialName = filename.replace(htmlExtReg,
-                    '').replace(/\/+/g, '.');
-                p[partialName] = readFile(filePath, 'utf-8')
-                    .then(function (content) {
-                        return Ractive.parse(content);
-                    });
-                return p;
-            }, {});
-            resolve(componentsRoot ?
-                getParsedPartials(componentsRoot).then(function (cp) {
-                    return Promise.props(_.assign({}, partials, cp));
-                }) :
-                Promise.props(partials));
-        });
-        fs.exists(partialsRoot, function (exists) {
-            if (!exists) {
-                resolve({});
-            } else {
-                glob('**/*.html', {
-                    cwd: partialsRoot
-                }, gotFiles);
-            }
-
-        });
-
+    return co(function * () {
+        var files = [];
+        if (yield exists(moduleCccPartialsRoot)) {
+            files.concat(yield glob.bind(null, '**/*.html', {
+                cwd: moduleCccPartialsRoot
+            }));
+        }
+        if (yield exists(cccPartialsRoot)) {
+            files.concat(yield glob.bind(null, '**/*.html', {
+                cwd: cccPartialsRoot
+            }));
+        }
     });
+    return Promise.props(files.reduce(function (p, filename) {
+        var filePath = path.join(partialsRoot, filename);
+        var partialName = filename.replace(htmlExtReg, '').replace(/\/+/g, '.');
+        p[partialName] = readFile(filePath, 'utf-8') .then(function (content) {
+            return Ractive.parse(content);
+        });
+        return p;
+    }, {}));
 }
 
 exports.getParsedTemplate = getParsedTemplate;
@@ -75,15 +70,10 @@ function preRenderView(view) {
     if (view.template && view.partials) {
         return Promise.resolve(view);
     }
-    var appRoot = view.path.substring(0, Math.min(
-        view.path.indexOf('/node_modules/@ccc/') + 1 || Infinity,
-        view.path.indexOf('/ccc/') + 1 || Infinity,
-        view.path.indexOf('/views/') + 1 || Infinity) - 1);
     return Promise.props({
         template: getParsedTemplate(view.path),
-        partials: getParsedPartials(appRoot, view.path)
-    })
-        .then(_.assign.bind(null, view));
+        partials: getParsedPartials(view.path)
+    }).then(_.assign.bind(null, view));
 }
 
 exports.renderView = renderView;
