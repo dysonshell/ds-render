@@ -1,15 +1,12 @@
 'use strict';
+require('@ds/common');
+var fs = require('fs');
 var assert = require('assert');
-var Ractive = require('ractive');
 var htmlExtReg = /\.html$/i;
 var path = require('path');
-var fs = require('fs');
-var rewriteComponentSource = require('@ds/rewrite-component-source');
 var glob = require('glob');
 var unary = require('fn-unary');
 var errto = require('errto');
-var assign = require('lodash-node/modern/object/assign');
-var Promise = require('bluebird');
 
 var readFile = Promise.promisify(require("fs").readFile);
 
@@ -34,17 +31,13 @@ function getParsedPartials(appRoot, viewPath) {
                     '').replace(/\/+/g, '.');
                 p[partialName] = readFile(filePath, 'utf-8')
                     .then(function (content) {
-                        return Ractive.parse(
-                            rewriteComponentSource(
-                                filePath, content), {
-                                stripComments: false
-                            });
+                        return Ractive.parse(content);
                     });
                 return p;
             }, {});
             resolve(componentsRoot ?
                 getParsedPartials(componentsRoot).then(function (cp) {
-                    return Promise.props(assign({}, partials, cp));
+                    return Promise.props(_.assign({}, partials, cp));
                 }) :
                 Promise.props(partials));
         });
@@ -67,7 +60,7 @@ exports.getParsedTemplate = getParsedTemplate;
 function getParsedTemplate(filePath) {
     return readFile(filePath, 'utf-8')
         .then(function (template) {
-            return Ractive.parse(rewriteComponentSource(filePath, template), {
+            return Ractive.parse(template, {
                 stripComments: false
             });
         });
@@ -90,7 +83,7 @@ function preRenderView(view) {
         template: getParsedTemplate(view.path),
         partials: getParsedPartials(appRoot, view.path)
     })
-        .then(assign.bind(null, view));
+        .then(_.assign.bind(null, view));
 }
 
 exports.renderView = renderView;
@@ -175,13 +168,13 @@ exports.augmentApp = function (app, opts) {
 
         var appLocals = {};
         if (app.locals.__proto__) { // import from parent-app, but not ancestor-app
-            assign(appLocals, app.locals.__proto__);
+            _.assign(appLocals, app.locals.__proto__);
         }
-        assign(appLocals, app.locals);
+        _.assign(appLocals, app.locals);
 
-        return Promise.props(assign(options, res.locals))
+        return Promise.props(_.assign(options, res.locals))
             .then(function (options) {
-                return assign(appLocals, options);
+                return _.assign(appLocals, options);
             })
     };
 
