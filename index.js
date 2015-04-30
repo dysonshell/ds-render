@@ -2,8 +2,8 @@
 require('@ds/common');
 var fs = require('fs');
 var assert = require('assert');
-var htmlExtReg = /\.html$/i;
 var path = require('path');
+var htmlExtReg = /\.html$/i;
 var glob = require('glob');
 var unary = require('fn-unary');
 var co = require('co');
@@ -109,12 +109,11 @@ exports.augmentApp = function (app, opts) {
     });
     app.set('views', [].concat(app.get('views'))
         .concat((glob.sync('ccc/*/views/', {
-                    cwd: opts.appRoot
-                })
-                .concat(glob.sync('node_modules/@ccc/*/views/', {
-                    cwd: opts.appRoot
-                })))
-            .map(unary(path.join.bind(path, opts.appRoot))))
+            cwd: opts.appRoot
+        })).concat(glob.sync('node_modules/@ccc/*/views/', {
+            cwd: opts.appRoot
+        }))
+        .map(unary(path.join.bind(path, opts.appRoot))))
         .filter(Boolean));
 
     var View = app.get('view');
@@ -133,7 +132,7 @@ exports.augmentApp = function (app, opts) {
             return view;
         }
         view = new View(viewPath, {
-            defaultEngine: app.get('view engine'),
+            defaultEngine: 'html',
             root: app.get('views'),
             engines: app.engines
         });
@@ -189,9 +188,10 @@ exports.augmentApp = function (app, opts) {
         var res = this;
         var fn = arguments[arguments.length - 1];
         if (typeof fn !== 'function') {
-            fn = errto(res.req.next, function (html) {
+            fn = function (err, html) {
+                res.req.next(err);
                 res.send(html);
-            });
+            };
         }
         res.rendr.apply(this, arguments)
             .then(fn.bind(null, null))
