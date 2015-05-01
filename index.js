@@ -6,9 +6,11 @@ var assert = require('assert');
 var path = require('path');
 var htmlExtReg = /\.html$/i;
 var glob = require('glob');
+var cccglob = require('@ds/cccglob');
 var unary = require('fn-unary');
 var co = require('co');
 var errto = require('errto');
+var errs = require('errs');
 
 var readFile = Promise.promisify(require("fs").readFile);
 
@@ -21,34 +23,27 @@ function exists(filePath) {
 exports.getParsedPartials = getParsedPartials;
 
 function getParsedPartials(viewPath) {
-    var match = (viewPath || '').match(/\/(ccc|node_modules\/@ccc)(\/[^\/]+\/)views\//);
+    var match = (viewPath || '').match(/\/(ccc|node_modules\/@ccc)\/([^\/]+)\/views\//);
     if (!match) {
-        return Promise.reject(new Error('viewPath should be in ccc/*/views/ or node_modules/@ccc/*/views/'));
+        return Promise.reject(new Error('viewPath should be in either ccc/*/views/ or node_modules/@ccc/*/views/'));
     }
-    var cccPartialsRoot = viewPath.substring(0, match.index) + '/ccc' + match[2] + '/partials';
-    var moduleCccPartialsRoot = viewPath.substring(0, match.index) + '/node_modules/@ccc' + match[2] + '/partials';
 
+    var componentName = match[2];
+    var prefix = 'ccc/' + componentName + '/partials/';
     return co(function * () {
-        var files = [];
-        if (yield exists(moduleCccPartialsRoot)) {
-            files.concat(yield glob.bind(null, '**/*.html', {
-                cwd: moduleCccPartialsRoot
-            }));
-        }
-        if (yield exists(cccPartialsRoot)) {
-            files.concat(yield glob.bind(null, '**/*.html', {
-                cwd: cccPartialsRoot
-            }));
-        }
+        var files = (yield cccglob(prefix + '**/*.html'))
+            .map(function(file) {
+                return file.substring(prefix.length);
+            });
+        return Promise.props(files.reduce(function (p, filename) {
+            var filePath = path.join(partialsRoot, filename);
+            var partialName = filename.replace(htmlExtReg, '').replace(/\/+/g, '.');
+            p[partialName] = readFile(filePath, 'utf-8') .then(function (content) {
+                return Ractive.parse(content);
+            });
+            return p;
+        }, {}));
     });
-    return Promise.props(files.reduce(function (p, filename) {
-        var filePath = path.join(partialsRoot, filename);
-        var partialName = filename.replace(htmlExtReg, '').replace(/\/+/g, '.');
-        p[partialName] = readFile(filePath, 'utf-8') .then(function (content) {
-            return Ractive.parse(content);
-        });
-        return p;
-    }, {}));
 }
 
 exports.getParsedTemplate = getParsedTemplate;
@@ -99,6 +94,9 @@ function toHTML(template, partials, options) {
 
 exports.augmentApp = function (app, opts) {
     assert(opts.appRoot);
+    if (!GLOBAL.APP_ROOT) {
+        GLOBAL.APP_ROOT = opts.appRoot;
+    }
     app.set('view engine', 'html');
     app.engine('html', function (viewPath, options, fn) {
         renderView(getView(app, viewPath, getCache(app)), options)
@@ -108,21 +106,37 @@ exports.augmentApp = function (app, opts) {
                 fn(err);
             });
     });
-    app.set('views', [].concat(app.get('views'))
-        .concat((glob.sync('ccc/*/views/', {
-            cwd: opts.appRoot
-        })).concat(glob.sync('node_modules/@ccc/*/views/', {
-            cwd: opts.appRoot
-        }))
-        .map(unary(path.join.bind(path, opts.appRoot))))
-        .filter(Boolean));
+    app.set('views', []);;
 
     var View = app.get('view');
 
-    function getViewPath(res) {
+    var getViewPath = co.wrap(function(res) {
         var m = res.req.hookFactoryModule || res.req.routerFactoryModule;
-        return (res.viewPath || res.req.path).replace(/^\/|\/$/g, '');
-    }
+        var viewPath = (res.viewPath || res.req.path).replace(/^\/|\/$/g, '');
+        if (viewPath.indexOf('ccc/') === 0) {
+            return require.resolve(viewPath);
+        }
+        if (m) {
+            return m.resolve('./views/' + viewPath);
+        }
+        var files = yield cccglob.bind(null, 'ccc/*/views/' + viewPath);
+        if (files.length !== 1) {
+            var errobj = {
+                viewPath: viewPath,
+                files: files,
+            };
+            if (m) {
+                errobj.filename = m.filename;
+            }
+            if (files.length === 0) {
+                errobj.message = 'NOT_FOUND';
+            } else if (files.length > 1) {
+                errobj.message = 'FOUND_CONFLICTS';
+            }
+            throw errs.create(errobj);
+        }
+        return files[0];
+    });
 
     function getCache(app) {
         return app.enabled('view cache') && app.cache || (app.cache = {});
@@ -144,13 +158,13 @@ exports.augmentApp = function (app, opts) {
         return view;
     }
 
-    app.response.preRenderView = function (name) {
+    app.response.preRenderView = co.wrap(function(name) {
         var res = this;
         if (!name) {
-            name = getViewPath(res);
+            name = yield getViewPath(res);
         }
         return preRenderView(getView(res.app, name, getCache(res.app)));
-    };
+    });
 
     app.response.preRenderLocals = function (options) {
         var res = this;
@@ -169,14 +183,14 @@ exports.augmentApp = function (app, opts) {
             })
     };
 
-    app.response.rendr = function (name, options) {
+    app.response.rendr = co.wrap(function(name, options) {
         var res = this;
         var app = res.app;
         if (!name) {
-            name = getViewPath(res);
+            name = yield getViewPath(res);
         } else if (typeof name !== 'string') {
             options = name;
-            name = getViewPath(res);
+            name = yield getViewPath(res);
         }
         options = options || {};
 
@@ -184,7 +198,7 @@ exports.augmentApp = function (app, opts) {
             res.preRenderView(name),
             res.preRenderLocals(options),
             renderView);
-    };
+    });
 
     app.response.render = function () {
         var res = this;
@@ -197,7 +211,21 @@ exports.augmentApp = function (app, opts) {
         }
         res.rendr.apply(this, arguments)
             .then(fn.bind(null, null))
-            .catch(fn);
+            .catch(function(err) {
+                if (err.message === 'NOT_FOUND') {
+                    fn(null, '<!doctype html><h1>未找到模版</h1><dl> +
+                        '<dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
+                        (err.filename ? '<dt>filename</dt><dd>'+ err.filename + '</dd>' : '') +
+                        '</dl>');
+                } else if (err.message === 'FOUND_CONFLICTS') {
+                    fn(null, '<!doctype html><h1>找到对应的多个模版</h1>' +
+                        '<p>自动解决模板路径在以下文件中找到多个对应的模版，请确保 url 与模版路径无冲突或在 router/hook 指定模版路径。</p>' +
+                        '<dl><dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
+                        '<dt>files</dt><dd>'+ err.files.join('<br>') + '</dd></dl>');
+                } else (
+                    fn(err);
+                }
+            });
     };
 
     var middleware = function (req, res, next) {
