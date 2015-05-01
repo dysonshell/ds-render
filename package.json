@@ -7,8 +7,7 @@
     "index.js"
   ],
   "scripts": {
-    "test": "tape",
-    "test-all": "tape test/*.js"
+    "test": "tape test/cases/*.js"
   },
   "repository": {
     "type": "git",

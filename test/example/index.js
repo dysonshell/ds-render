@@ -1,7 +1,8 @@
 'use strict';
+require('@ds/common');
+require('@ds/nrequire');
 module.exports = function () {
-    var app = require('@ds/base')
-        .createApp(__dirname);
+    var app = require('express')();
 
     app.dsRenderMiddleware = require('../../')
         .augmentApp(app, {

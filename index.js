@@ -12,7 +12,16 @@ var co = require('co');
 var errto = require('errto');
 var errs = require('errs');
 
-var readFile = Promise.promisify(require("fs").readFile);
+function readFile(filePath) {
+    return new Promise(function (resolve, reject) {
+        fs.readFile(filePath, 'utf8', function (err, content) {
+            if (err) {
+                return reject(err);
+            }
+            resolve(content);
+        });
+    });
+}
 
 function exists(filePath) {
     return new Promise(function (resolve) {
@@ -31,18 +40,22 @@ function getParsedPartials(viewPath) {
     var componentName = match[2];
     var prefix = 'ccc/' + componentName + '/partials/';
     return co(function * () {
-        var files = (yield cccglob(prefix + '**/*.html'))
+        var files = (yield cccglob.bind(null, prefix + '**/*.html'))
             .map(function(file) {
                 return file.substring(prefix.length);
             });
-        return Promise.props(files.reduce(function (p, filename) {
-            var filePath = path.join(partialsRoot, filename);
+        var p = {};
+        files.forEach(function (filename) {
             var partialName = filename.replace(htmlExtReg, '').replace(/\/+/g, '.');
-            p[partialName] = readFile(filePath, 'utf-8') .then(function (content) {
-                return Ractive.parse(content);
-            });
-            return p;
-        }, {}));
+            p[partialName] = co(function *() {
+                var filePath = path.join(APP_ROOT, prefix, filename);
+                if (!(yield exists(filePath))) {
+                    filePath = path.join(APP_ROOT, 'node_modules/@' + prefix, filename);
+                }
+                return filePath;
+            }).then(readFile).then(Ractive.parse);
+        });
+        return Promise.props(p);
     });
 }
 
@@ -110,7 +123,7 @@ exports.augmentApp = function (app, opts) {
 
     var View = app.get('view');
 
-    var getViewPath = co.wrap(function(res) {
+    var getViewPath = co.wrap(function *(res) {
         var m = res.req.hookFactoryModule || res.req.routerFactoryModule;
         var viewPath = (res.viewPath || res.req.path).replace(/^\/|\/$/g, '');
         if (viewPath.indexOf('ccc/') === 0) {
@@ -158,7 +171,7 @@ exports.augmentApp = function (app, opts) {
         return view;
     }
 
-    app.response.preRenderView = co.wrap(function(name) {
+    app.response.preRenderView = co.wrap(function *(name) {
         var res = this;
         if (!name) {
             name = yield getViewPath(res);
@@ -183,7 +196,7 @@ exports.augmentApp = function (app, opts) {
             })
     };
 
-    app.response.rendr = co.wrap(function(name, options) {
+    app.response.rendr = co.wrap(function *(name, options) {
         var res = this;
         var app = res.app;
         if (!name) {
@@ -213,7 +226,7 @@ exports.augmentApp = function (app, opts) {
             .then(fn.bind(null, null))
             .catch(function(err) {
                 if (err.message === 'NOT_FOUND') {
-                    fn(null, '<!doctype html><h1>未找到模版</h1><dl> +
+                    fn(null, '<!doctype html><h1>未找到模版</h1><dl>' +
                         '<dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
                         (err.filename ? '<dt>filename</dt><dd>'+ err.filename + '</dd>' : '') +
                         '</dl>');
@@ -222,7 +235,7 @@ exports.augmentApp = function (app, opts) {
                         '<p>自动解决模板路径在以下文件中找到多个对应的模版，请确保 url 与模版路径无冲突或在 router/hook 指定模版路径。</p>' +
                         '<dl><dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
                         '<dt>files</dt><dd>'+ err.files.join('<br>') + '</dd></dl>');
-                } else (
+                } else {
                     fn(err);
                 }
             });
