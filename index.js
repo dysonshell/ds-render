@@ -1,4 +1,5 @@
 'use strict';
+require('@ds/nrequire');
 require('@ds/common');
 var fs = require('fs');
 var assert = require('assert');
@@ -119,6 +120,7 @@ exports.augmentApp = function (app, opts) {
     var View = app.get('view');
 
     function getViewPath(res) {
+        var m = res.req.hookFactoryModule || res.req.routerFactoryModule;
         return (res.viewPath || res.req.path).replace(/^\/|\/$/g, '');
     }
 
@@ -133,7 +135,7 @@ exports.augmentApp = function (app, opts) {
         }
         view = new View(viewPath, {
             defaultEngine: 'html',
-            root: app.get('views'),
+            root: [],
             engines: app.engines
         });
         if (cache && view.path) {
@@ -210,7 +212,7 @@ exports.augmentApp = function (app, opts) {
             .catch(next);
     };
 
-    if (opts.appendMiddleware) {
+    if (opts.appendMiddleware !== false) {
         app.use(middleware);
     }
 
