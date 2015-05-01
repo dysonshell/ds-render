@@ -46,7 +46,7 @@ function getParsedPartials(viewPath) {
             });
         var p = {};
         files.forEach(function (filename) {
-            var partialName = filename.replace(htmlExtReg, '').replace(/\/+/g, '.');
+            var partialName = filename.replace(htmlExtReg, '').replace(/\/+/g, '__');
             p[partialName] = co(function *() {
                 var filePath = path.join(APP_ROOT, prefix, filename);
                 if (!(yield exists(filePath))) {
@@ -74,7 +74,7 @@ exports.preRenderView = preRenderView;
 
 function preRenderView(view) {
     if (!view.path) {
-        return Promise.resolve({});
+        return Promise.reject(new Error('VIEW_NOT_FOUND'));
     }
     if (view.template && view.partials) {
         return Promise.resolve(view);
@@ -85,25 +85,16 @@ function preRenderView(view) {
     }).then(_.assign.bind(null, view));
 }
 
-exports.renderView = renderView;
-
-function renderView(view, options) {
-    return preRenderView(view)
-        .then(function (obj) {
-            if (!view.path) {
-                return Promise.resolve('');
-            }
-            return toHTML(view.template, view.partials, options);
-        });
-}
-
-function toHTML(template, partials, options) {
+exports.renderView = co.wrap(function *(view, data) {
+    view = yield preRenderView(view);
+    data = yield Promise.props(yield Promise.resolve(data || {}));
+    // data 可以整个是 promise，也可以其中某些属性是 promise
     return (new Ractive({
-        partials: partials,
-        template: template,
-        data: options
+        partials: view.partials,
+        template: view.template,
+        data: data
     })).toHTML();
-}
+});
 
 exports.augmentApp = function (app, opts) {
     assert(opts.appRoot);
