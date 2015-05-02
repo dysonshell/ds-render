@@ -9,7 +9,7 @@ app.get('/b', function (req, res, next) {
     next();
 });
 
-require('../../').augmentApp(app);
+require('../../')(app);
 
 tape('partial/a', function (test) {
     test.plan(2);

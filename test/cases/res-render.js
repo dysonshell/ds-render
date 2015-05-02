@@ -12,7 +12,7 @@ app.get('/b', function (req, res) {
 app.get('/err', function (req, res, next) {
     next(new Error('TEST_ERR_TMPL'));
 });
-require('../../').augmentApp(app);
+require('../../')(app);
 
 tape('partial/a', function (test) {
     test.plan(2);

@@ -32,6 +32,8 @@ function exists(filePath) {
 
 var viewPathReg = /\/(ccc|node_modules\/@ccc)\/([^\/]+)\/views\//;
 
+exports = module.exports = augmentApp;
+
 exports.getParsedPartials = getParsedPartials;
 
 function getParsedPartials(viewPath) {
@@ -104,7 +106,8 @@ var renderView = exports.renderView = co.wrap(function *(view, data) {
     })).toHTML();
 });
 
-exports.augmentApp = function (app, opts) {
+exports.augmentApp = augmentApp;
+function augmentApp(app, opts) {
     opts = opts || {};
     var appRoot = app.set('root') || opts.appRoot;
     assert(appRoot);
@@ -252,4 +255,4 @@ exports.augmentApp = function (app, opts) {
             next(err);
         });
     });
-};
+}

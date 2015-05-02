@@ -1,7 +1,7 @@
 'use strict';
 var tape = require('tape');
 var app = require('../example');
-require('../../').augmentApp(app);
+require('../../')(app);
 
 var request = require('supertest');
 
