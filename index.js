@@ -31,11 +31,13 @@ function exists(filePath) {
     });
 }
 
+var viewPathReg = /\/(ccc|node_modules\/@ccc)\/([^\/]+)\/views\//;
+
 exports.getParsedPartials = getParsedPartials;
 
 function getParsedPartials(viewPath) {
-console.log('gpp', viewPath);
-    var match = (viewPath || '').match(/\/(ccc|node_modules\/@ccc)\/([^\/]+)\/views\//);
+    console.log('gpp', viewPath);
+    var match = (viewPath || '').match(viewPathReg);
     if (!match) {
         return Promise.reject(new Error('viewPath should be in either ccc/*/views/ or node_modules/@ccc/*/views/'));
     }
@@ -181,6 +183,10 @@ exports.augmentApp = function (app, opts) {
             locals = viewPath;
             viewPath = yield getViewPath(res);
         }
+        if (!viewPath.match(viewPathReg)) {
+            res.viewPath = viewPath;
+            viewPath = yield getViewPath(res);
+        }
         locals = locals || {};
 
         console.log('rendr viewPath', viewPath);
@@ -195,7 +201,9 @@ exports.augmentApp = function (app, opts) {
         var fn = arguments[arguments.length - 1];
         if (typeof fn !== 'function') {
             fn = function (err, html) {
-                res.req.next(err);
+                if (err) {
+                    return res.req.next(err);
+                }
                 res.send(html);
             };
         }
