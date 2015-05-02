@@ -47,13 +47,9 @@ function getParsedPartials(viewPath) {
         var p = {};
         files.forEach(function (filename) {
             var partialName = filename.replace(htmlExtReg, '').replace(/\/+/g, '__');
-            p[partialName] = co(function *() {
-                var filePath = path.join(APP_ROOT, prefix, filename);
-                if (!(yield exists(filePath))) {
-                    filePath = path.join(APP_ROOT, 'node_modules/@' + prefix, filename);
-                }
-                return filePath;
-            }).then(readFile).then(Ractive.parse);
+            p[partialName] = Promise.resolve(require.resolve(prefix + filename))
+                .then(readFile)
+                .then(Ractive.parse);
         });
         return Promise.props(p);
     });

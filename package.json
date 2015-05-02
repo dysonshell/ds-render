@@ -31,7 +31,7 @@
     "@ds/base": "*",
     "@ds/cccglob": "^2.0.0",
     "@ds/common": "^2.1.1",
-    "@ds/nrequire": "^1.1.0",
+    "@ds/nrequire": "^1.2.0",
     "co": "^4.5.2",
     "errs": "^0.3.2",
     "errto": "^0.2.1",
