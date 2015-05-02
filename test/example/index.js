@@ -1,15 +1,21 @@
 'use strict';
-module.exports = function () {
-    var app = require('@ds/base')
-        .createApp(__dirname);
+var path = require('path');
+require('@ds/nrequire');
+require('@ds/common');
+Ractive.DEBUG = false;
+console.log(APP_ROOT);
+var app = exports = module.exports = require('express')();
+app.set('root', __dirname);
 
-    app.dsRenderMiddleware = require('../../')
-        .augmentApp(app, {
-            appendMiddleware: false,
-            appRoot: __dirname,
-            assetsDirName: 'assets',
-            viewsDirName: 'views'
-        });
-
-    return app;
-};
+if (require.main === module) {
+    app.use('/err', function (req, res, next) {
+        next(new Error('TEST_500_PAGE'));
+    });
+    require('../../').augmentApp(app, {
+        appRoot: path.resolve(__dirname)
+    });
+    app.listen(8000, function (err) {
+        if (err) return console.log(err);
+        console.log('listening', this.address().port);
+    });
+}

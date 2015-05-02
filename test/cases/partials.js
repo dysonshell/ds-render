@@ -1,15 +1,9 @@
 'use strict';
 var tape = require('tape');
-var app = require('./example')();
-var request = require('supertest');
+var app = require('../example');
+require('../../')(app);
 
-app.get('/a', function (req, res) {
-    res.render();
-});
-app.get('/b', function (req, res) {
-    res.render('a');
-});
-app.use(app.dsRenderMiddleware);
+var request = require('supertest');
 
 tape('partial/a', function (test) {
     test.plan(2);
@@ -17,18 +11,24 @@ tape('partial/a', function (test) {
         .get('/a')
         .expect(200)
         .end(function (err, res) {
+            if (err) {
+                console.error(err);
+            }
             test.notOk(err);
             test.equal(res.text.trim(), 'partial a');
         });
 });
 
-tape('partial/b', function (test) {
+tape('partial/deep', function (test) {
     test.plan(2);
     request(app)
-        .get('/b')
+        .get('/deep')
         .expect(200)
         .end(function (err, res) {
+            if (err) {
+                console.error(err);
+            }
             test.notOk(err);
-            test.equal(res.text.trim(), 'partial a');
+            test.equal(res.text.trim(), 'deep partial partial in testc tc.d');
         });
 });

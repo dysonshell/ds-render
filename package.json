@@ -1,14 +1,14 @@
 {
   "name": "@ds/render",
-  "version": "0.6.1",
+  "version": "2.0.3",
   "description": "render module for dysonshell",
   "main": "index.js",
   "files": [
     "index.js"
   ],
   "scripts": {
-    "test": "tape",
-    "test-all": "tape test/*.js"
+    "test": "prove --exec ./node_modules/.bin/tape test/cases/*.js",
+    "tape-all": "tape test/cases/*.js"
   },
   "repository": {
     "type": "git",
@@ -21,21 +21,27 @@
   "license": "private",
   "peerDependencies": {
     "@ds/base": "*",
-    "lodash-node": "^2.4.1",
-    "ractive": "^0.6.1"
+    "@ds/common": "*",
+    "express": "*"
   },
   "devDependencies": {
-    "express": "^4.10.6",
     "supertest": "^0.15.0",
-    "tape": "^3.0.3"
+    "tape": "^4.0.0"
   },
   "dependencies": {
-    "@ds/rewrite-component-source": "^0.1.0",
-    "bluebird": "^2.9.5",
+    "@ds/base": "*",
+    "@ds/cccglob": "^2.0.0",
+    "@ds/common": "^2.2.0",
+    "@ds/nrequire": "^1.2.0",
+    "co": "^4.5.2",
+    "errs": "^0.3.2",
     "errto": "^0.2.1",
+    "express": "^4.12.3",
     "fn-unary": "^1.0.0",
-    "glob": "^4.3.1",
-    "lodash-node": "^2.4.1",
+    "glob": "^5.0.5",
     "rev-rewriter": "^1.1.0"
+  },
+  "engines": {
+    "node": "^1.0.0"
   }
 }
