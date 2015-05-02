@@ -4,7 +4,6 @@ require('@ds/common');
 var fs = require('fs');
 var assert = require('assert');
 var path = require('path');
-var express = require('express');
 var glob = require('glob');
 var cccglob = require('@ds/cccglob');
 var unary = require('fn-unary');
@@ -60,7 +59,6 @@ function getParsedPartials(viewPath) {
                 p[partialName.substring(prefix.length)] = p[partialName];
             }
         });
-        console.log('p', p);
         return Promise.props(p);
     });
 }
@@ -81,7 +79,10 @@ exports.preRenderView = preRenderView;
 
 function preRenderView(view) {
     if (!view.path) {
-        return Promise.reject(new Error('VIEW_NOT_FOUND'));
+        return Promise.reject(errs.create({
+            message: 'VIEW_NOT_FOUND',
+            statusCode: 404
+        }));
     }
     if (view.template && view.partials) {
         return Promise.resolve(view);
@@ -104,9 +105,11 @@ var renderView = exports.renderView = co.wrap(function *(view, data) {
 });
 
 exports.augmentApp = function (app, opts) {
-    assert(opts.appRoot);
+    opts = opts || {};
+    var appRoot = app.set('root') || opts.appRoot;
+    assert(appRoot);
     if (!GLOBAL.APP_ROOT) {
-        GLOBAL.APP_ROOT = opts.appRoot;
+        GLOBAL.APP_ROOT = appRoot;
     }
     app.set('views', []);;
 
@@ -134,6 +137,7 @@ exports.augmentApp = function (app, opts) {
             }
             if (files.length === 0) {
                 errobj.message = 'VIEW_NOT_FOUND';
+                errobj.statusCode = 404;
             } else if (files.length > 1) {
                 errobj.message = 'FOUND_CONFLICTS';
             }
@@ -174,19 +178,14 @@ exports.augmentApp = function (app, opts) {
             })
     };
 
-    app.response.rendr = co.wrap(function *(viewPath, locals) {
+    app.response.rendr = co.wrap(function *(vp, locals) {
         var res = this;
-        var app = res.app;
-        if (!viewPath) {
-            viewPath = yield getViewPath(res);
-        } else if (typeof viewPath !== 'string') {
-            locals = viewPath;
-            viewPath = yield getViewPath(res);
+        if (typeof vp === 'string') {
+            res.viewPath = vp;
+        } else {
+            locals = vp || {};
         }
-        if (!viewPath.match(viewPathReg)) {
-            res.viewPath = viewPath;
-            viewPath = yield getViewPath(res);
-        }
+        var viewPath = yield getViewPath(res);
         locals = locals || {};
 
         console.log('rendr viewPath', viewPath);
@@ -212,43 +211,45 @@ exports.augmentApp = function (app, opts) {
             .catch(fn);
     };
 
-    var router = express.Router();
-    router.use(function (req, res, next) {
+    app.use(function (req, res, next) {
         var ext = path.extname(req.path);
         if (ext && ext !== '.html') {
             return next();
         }
         return res.render()
     });
-    router.use(function (err, req, res, next) {
-        if (err.message === 'VIEW_NOT_FOUND') {
-            showErrorPage(res, 404, '<!doctype html><h1>未找到模版</h1><dl>' +
-                '<dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
-                (err.filename ? '<dt>filename</dt><dd>'+ err.filename + '</dd>' : '') +
-                '</dl>');
-        } else if (err.message === 'FOUND_CONFLICTS') {
-            showErrorPage(res, 500, '<!doctype html><h1>找到对应的多个模版</h1>' +
+    app.use(function (err, req, res, next) {
+        if (err.message === 'FOUND_CONFLICTS') {
+            // 这属于开发过程中的错误，强制显示提示开发者
+            res.status(500);
+            res.send('<!doctype html><h1>找到对应的多个模版</h1>' +
                 '<p>自动解决模板路径在以下文件中找到多个对应的模版，请确保 url 与模版路径无冲突或在 router/hook 指定模版路径。</p>' +
                 '<dl><dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
                 '<dt>files</dt><dd>'+ err.files.join('<br>') + '</dd></dl>');
-        } else {
-            next(err);
+            return;
         }
+        next(err);
     });
 
-    function showErrorPage(res, statusCode, defaultHtml) {
-        res.status(statusCode);
-        res.viewPath = '' + statusCode;
-        getViewPath(res).then(function (viewPath) {
+    app.use(function (err, req, res, next) {
+        // 处理所有接到的 err，要用 app.use 才行（否则只能接到同一 router 的 err）
+        console.log(err.statusCode);
+        if (typeof err.statusCode === 'number') {
+            res.status(err.statusCode);
+        }
+        if (typeof res.statusCode !== 'number' || res.statusCode < 400) {
+            res.status(500);
+        }
+        res.viewPath = '' + res.statusCode;
+        console.log(err);
+        return getViewPath(res).then(function (viewPath) {
+            console.log('y', arguments);
+            // 重试显示自定义错误页面
             res.render();
         }).catch(function () {
-            res.send(defaultHtml);
+            console.log(arguments);
+            console.log('ee', err);
+            next(err);
         });
-    }
-
-    if (opts.appendMiddleware !== false) {
-        app.use(router);
-    }
-
-    return router;
+    });
 };

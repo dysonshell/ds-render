@@ -1,7 +1,7 @@
 'use strict';
 var path = require('path');
 var tape = require('tape');
-var app = require('../example')();
+var app = require('../example');
 var request = require('supertest');
 
 app.get('/b', function (req, res, next) {
@@ -9,7 +9,7 @@ app.get('/b', function (req, res, next) {
     next();
 });
 
-app.use(app.dsRenderMiddleware);
+require('../../').augmentApp(app);
 
 tape('partial/a', function (test) {
     test.plan(2);

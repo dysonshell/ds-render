@@ -1,6 +1,6 @@
 'use strict';
 var tape = require('tape');
-var app = require('../example')();
+var app = require('../example');
 var request = require('supertest');
 
 app.get('/a', function (req, res) {
@@ -9,7 +9,10 @@ app.get('/a', function (req, res) {
 app.get('/b', function (req, res) {
     res.render('a');
 });
-app.use(app.dsRenderMiddleware);
+app.get('/err', function (req, res, next) {
+    next(new Error('TEST_ERR_TMPL'));
+});
+require('../../').augmentApp(app);
 
 tape('partial/a', function (test) {
     test.plan(2);
@@ -41,5 +44,27 @@ tape('not found', function (test) {
         .end(function (err, res) {
             test.notOk(err);
             test.equal(res.text.trim(), 'hello 404');
+        });
+});
+
+tape('err page', function (test) {
+    test.plan(2);
+    request(app)
+        .get('/err')
+        .expect(500)
+        .end(function (err, res) {
+            test.notOk(err);
+            test.equal(res.text.trim(), 'error 500');
+        });
+});
+
+tape('conflict', function (test) {
+    test.plan(2);
+    request(app)
+        .get('/ccc')
+        .expect(500)
+        .end(function (err, res) {
+            test.notOk(err);
+            test.equal(res.text.trim().indexOf('<!doctype html><h1>找到对应的多个模版</h1>'), 0);
         });
 });

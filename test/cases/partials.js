@@ -1,9 +1,9 @@
 'use strict';
 var tape = require('tape');
-var app = require('../example')();
-var request = require('supertest');
+var app = require('../example');
+require('../../').augmentApp(app);
 
-app.use(app.dsRenderMiddleware);
+var request = require('supertest');
 
 tape('partial/a', function (test) {
     test.plan(2);
