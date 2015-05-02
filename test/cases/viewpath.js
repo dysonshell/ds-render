@@ -1,7 +1,7 @@
 'use strict';
 var path = require('path');
 var tape = require('tape');
-var app = require('./example')();
+var app = require('../example')();
 var request = require('supertest');
 
 app.get('/b', function (req, res, next) {

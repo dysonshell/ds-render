@@ -32,3 +32,14 @@ tape('partial/b', function (test) {
             test.equal(res.text.trim(), 'partial a');
         });
 });
+
+tape('not found', function (test) {
+    test.plan(2);
+    request(app)
+        .get('/cc')
+        .expect(404)
+        .end(function (err, res) {
+            test.notOk(err);
+            test.equal(res.text.trim(), 'hello 404');
+        });
+});

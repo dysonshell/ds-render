@@ -221,14 +221,13 @@ exports.augmentApp = function (app, opts) {
         return res.render()
     });
     router.use(function (err, req, res, next) {
-        res.status(500);
         if (err.message === 'VIEW_NOT_FOUND') {
-            res.send('<!doctype html><h1>未找到模版</h1><dl>' +
+            showErrorPage(res, 404, '<!doctype html><h1>未找到模版</h1><dl>' +
                 '<dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
                 (err.filename ? '<dt>filename</dt><dd>'+ err.filename + '</dd>' : '') +
                 '</dl>');
         } else if (err.message === 'FOUND_CONFLICTS') {
-            res.send('<!doctype html><h1>找到对应的多个模版</h1>' +
+            showErrorPage(res, 500, '<!doctype html><h1>找到对应的多个模版</h1>' +
                 '<p>自动解决模板路径在以下文件中找到多个对应的模版，请确保 url 与模版路径无冲突或在 router/hook 指定模版路径。</p>' +
                 '<dl><dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
                 '<dt>files</dt><dd>'+ err.files.join('<br>') + '</dd></dl>');
@@ -236,6 +235,16 @@ exports.augmentApp = function (app, opts) {
             next(err);
         }
     });
+
+    function showErrorPage(res, statusCode, defaultHtml) {
+        res.status(statusCode);
+        res.viewPath = '' + statusCode;
+        getViewPath(res).then(function (viewPath) {
+            res.render();
+        }).catch(function () {
+            res.send(defaultHtml);
+        });
+    }
 
     if (opts.appendMiddleware !== false) {
         app.use(router);
