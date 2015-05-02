@@ -4,13 +4,15 @@ require('@ds/common');
 var fs = require('fs');
 var assert = require('assert');
 var path = require('path');
-var htmlExtReg = /\.html$/i;
+var express = require('express');
 var glob = require('glob');
 var cccglob = require('@ds/cccglob');
 var unary = require('fn-unary');
 var co = require('co');
 var errto = require('errto');
 var errs = require('errs');
+
+var htmlExtReg = /\.html$/i;
 
 function readFile(filePath) {
     return new Promise(function (resolve, reject) {
@@ -129,7 +131,7 @@ exports.augmentApp = function (app, opts) {
                 errobj.filename = m.filename;
             }
             if (files.length === 0) {
-                errobj.message = 'NOT_FOUND';
+                errobj.message = 'VIEW_NOT_FOUND';
             } else if (files.length > 1) {
                 errobj.message = 'FOUND_CONFLICTS';
             }
@@ -211,38 +213,41 @@ exports.augmentApp = function (app, opts) {
         }
         res.rendr.apply(this, arguments)
             .then(fn.bind(null, null))
-            .catch(function(err) {
-                if (err.message === 'NOT_FOUND') {
-                    fn(null, '<!doctype html><h1>未找到模版</h1><dl>' +
-                        '<dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
-                        (err.filename ? '<dt>filename</dt><dd>'+ err.filename + '</dd>' : '') +
-                        '</dl>');
-                } else if (err.message === 'FOUND_CONFLICTS') {
-                    fn(null, '<!doctype html><h1>找到对应的多个模版</h1>' +
-                        '<p>自动解决模板路径在以下文件中找到多个对应的模版，请确保 url 与模版路径无冲突或在 router/hook 指定模版路径。</p>' +
-                        '<dl><dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
-                        '<dt>files</dt><dd>'+ err.files.join('<br>') + '</dd></dl>');
-                } else {
-                    fn(err);
-                }
-            });
+            .catch(fn);
     };
 
-    var middleware = function (req, res, next) {
+    var router = express.Router();
+    router.use(function (req, res, next) {
         var ext = path.extname(req.path);
         if (ext && ext !== '.html') {
             return next();
         }
-        return res.rendr()
+        return res.render()
             .then(function (html) {
                 res.send(html)
             })
             .catch(next);
-    };
+    });
+    router.use(function (err, req, res, next) {
+        res.status(500);
+        if (err.message === 'VIEW_NOT_FOUND') {
+            res.send(null, '<!doctype html><h1>未找到模版</h1><dl>' +
+                '<dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
+                (err.filename ? '<dt>filename</dt><dd>'+ err.filename + '</dd>' : '') +
+                '</dl>');
+        } else if (err.message === 'FOUND_CONFLICTS') {
+            res.send(null, '<!doctype html><h1>找到对应的多个模版</h1>' +
+                '<p>自动解决模板路径在以下文件中找到多个对应的模版，请确保 url 与模版路径无冲突或在 router/hook 指定模版路径。</p>' +
+                '<dl><dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
+                '<dt>files</dt><dd>'+ err.files.join('<br>') + '</dd></dl>');
+        } else {
+            next(err);
+        }
+    });
 
     if (opts.appendMiddleware !== false) {
-        app.use(middleware);
+        app.use(router);
     }
 
-    return middleware;
+    return router;
 };

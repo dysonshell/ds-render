@@ -20,10 +20,10 @@
   "license": "private",
   "peerDependencies": {
     "@ds/base": "*",
-    "@ds/common": "*"
+    "@ds/common": "*",
+    "express": "*"
   },
   "devDependencies": {
-    "express": "^4.10.6",
     "supertest": "^0.15.0",
     "tape": "^4.0.0"
   },
@@ -35,6 +35,7 @@
     "co": "^4.5.2",
     "errs": "^0.3.2",
     "errto": "^0.2.1",
+    "express": "^4.12.3",
     "fn-unary": "^1.0.0",
     "glob": "^5.0.5",
     "rev-rewriter": "^1.1.0"
