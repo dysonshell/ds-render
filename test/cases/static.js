@@ -14,7 +14,7 @@ tape('parse', function (test) {
         var partials = yield render.getParsedPartials(viewPath);
         var template = yield render.getParsedTemplate(viewPath);
         test.ok(partials.tc);
-        test.ok(partials.d__e);
+        test.ok(partials['d/e']);
         console.log('partials', partials);
         test.ok(template);
     }).catch(function (err) {

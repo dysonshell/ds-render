@@ -34,6 +34,7 @@ function exists(filePath) {
 exports.getParsedPartials = getParsedPartials;
 
 function getParsedPartials(viewPath) {
+console.log('gpp', viewPath);
     var match = (viewPath || '').match(/\/(ccc|node_modules\/@ccc)\/([^\/]+)\/views\//);
     if (!match) {
         return Promise.reject(new Error('viewPath should be in either ccc/*/views/ or node_modules/@ccc/*/views/'));
@@ -42,17 +43,22 @@ function getParsedPartials(viewPath) {
     var componentName = match[2];
     var prefix = 'ccc/' + componentName + '/partials/';
     return co(function * () {
-        var files = (yield cccglob.bind(null, prefix + '**/*.html'))
-            .map(function(file) {
+        var files = (yield cccglob.bind(null, 'ccc/*/partials/**/*.html'));
+            [].map(function(file) {
                 return file.substring(prefix.length);
             });
         var p = {};
+        console.log('files', files);
         files.forEach(function (filename) {
-            var partialName = filename.replace(htmlExtReg, '').replace(/\/+/g, '__');
-            p[partialName] = Promise.resolve(require.resolve(prefix + filename))
+            var partialName = filename.replace(htmlExtReg, '');
+            p[partialName] = Promise.resolve(require.resolve(filename))
                 .then(readFile)
                 .then(Ractive.parse);
+            if (partialName.indexOf(prefix) === 0) {
+                p[partialName.substring(prefix.length)] = p[partialName];
+            }
         });
+        console.log('p', p);
         return Promise.props(p);
     });
 }
@@ -60,6 +66,7 @@ function getParsedPartials(viewPath) {
 exports.getParsedTemplate = getParsedTemplate;
 
 function getParsedTemplate(filePath) {
+console.log('gpt', filePath);
     return readFile(filePath, 'utf-8')
         .then(function (template) {
             return Ractive.parse(template, {
@@ -83,7 +90,7 @@ function preRenderView(view) {
     }).then(_.assign.bind(null, view));
 }
 
-exports.renderView = co.wrap(function *(view, data) {
+var renderView = exports.renderView = co.wrap(function *(view, data) {
     view = yield preRenderView(view);
     data = yield Promise.props(yield Promise.resolve(data || {}));
     // data 可以整个是 promise，也可以其中某些属性是 promise
@@ -99,32 +106,25 @@ exports.augmentApp = function (app, opts) {
     if (!GLOBAL.APP_ROOT) {
         GLOBAL.APP_ROOT = opts.appRoot;
     }
-    app.set('view engine', 'html');
-    app.engine('html', function (viewPath, options, fn) {
-        renderView(getView(app, viewPath, getCache(app)), options)
-            .then(function (html) {
-                fn(null, html);
-            }).catch(function (err) {
-                fn(err);
-            });
-    });
     app.set('views', []);;
-
-    var View = app.get('view');
 
     var getViewPath = co.wrap(function *(res) {
         var m = res.req.hookFactoryModule || res.req.routerFactoryModule;
-        var viewPath = (res.viewPath || res.req.path).replace(/^\/|\/$/g, '');
+        var vp = (res.viewPath || res.req.path).replace(/^\/|\/$/g, '');
+        var viewPath = vp.match(/\.html$/) ? vp : vp + '.html';
         if (viewPath.indexOf('ccc/') === 0) {
             return require.resolve(viewPath);
         }
         if (m) {
             return m.resolve('./views/' + viewPath);
         }
-        var files = yield cccglob.bind(null, 'ccc/*/views/' + viewPath);
+        var files = (yield cccglob.bind(null, 'ccc/*/views/' + viewPath))
+            .map(require.resolve);
+        console.log('files', files);
+        console.log('files.length', files.length);
         if (files.length !== 1) {
             var errobj = {
-                viewPath: viewPath,
+                viewPath: '/' + vp,
                 files: files,
             };
             if (m) {
@@ -140,38 +140,25 @@ exports.augmentApp = function (app, opts) {
         return files[0];
     });
 
-    function getCache(app) {
-        return app.enabled('view cache') && app.cache || (app.cache = {});
-    }
-
-    function getView(app, viewPath, cache) {
-        var view;
+    function getView(viewPath) {
+        var cache = app.enabled('view cache') ? (app.cache || (app.cache = {})) : false;
         if (cache && (view = cache[viewPath])) {
             return view;
         }
-        view = new View(viewPath, {
-            defaultEngine: 'html',
-            root: [],
-            engines: app.engines
-        });
-        if (cache && view.path) {
+        console.log('getView', viewPath);
+        var view = {
+            path: viewPath
+        };
+        if (cache) {
             cache[viewPath] = cache[view.path] = view;
         }
-        return view;
+        return preRenderView(view);
     }
 
-    app.response.preRenderView = co.wrap(function *(name) {
-        var res = this;
-        if (!name) {
-            name = yield getViewPath(res);
-        }
-        return preRenderView(getView(res.app, name, getCache(res.app)));
-    });
-
-    app.response.preRenderLocals = function (options) {
+    app.response.preRenderLocals = function (locals) {
         var res = this;
         var app = res.app;
-        options = options || {};
+        locals = locals || {};
 
         var appLocals = {};
         if (app.locals.__proto__) { // import from parent-app, but not ancestor-app
@@ -179,27 +166,28 @@ exports.augmentApp = function (app, opts) {
         }
         _.assign(appLocals, app.locals);
 
-        return Promise.props(_.assign(options, res.locals))
-            .then(function (options) {
-                return _.assign(appLocals, options);
+        return Promise.props(_.assign(locals, res.locals))
+            .then(function (locals) {
+                return _.assign(appLocals, locals);
             })
     };
 
-    app.response.rendr = co.wrap(function *(name, options) {
+    app.response.rendr = co.wrap(function *(viewPath, locals) {
         var res = this;
         var app = res.app;
-        if (!name) {
-            name = yield getViewPath(res);
-        } else if (typeof name !== 'string') {
-            options = name;
-            name = yield getViewPath(res);
+        if (!viewPath) {
+            viewPath = yield getViewPath(res);
+        } else if (typeof viewPath !== 'string') {
+            locals = viewPath;
+            viewPath = yield getViewPath(res);
         }
-        options = options || {};
+        locals = locals || {};
 
-        return Promise.join(
-            res.preRenderView(name),
-            res.preRenderLocals(options),
-            renderView);
+        console.log('rendr viewPath', viewPath);
+        var args = yield [getView(viewPath), res.preRenderLocals(locals)];
+        console.log(args);
+
+        return renderView.apply(null, args);
     });
 
     app.response.render = function () {
@@ -223,20 +211,16 @@ exports.augmentApp = function (app, opts) {
             return next();
         }
         return res.render()
-            .then(function (html) {
-                res.send(html)
-            })
-            .catch(next);
     });
     router.use(function (err, req, res, next) {
         res.status(500);
         if (err.message === 'VIEW_NOT_FOUND') {
-            res.send(null, '<!doctype html><h1>未找到模版</h1><dl>' +
+            res.send('<!doctype html><h1>未找到模版</h1><dl>' +
                 '<dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
                 (err.filename ? '<dt>filename</dt><dd>'+ err.filename + '</dd>' : '') +
                 '</dl>');
         } else if (err.message === 'FOUND_CONFLICTS') {
-            res.send(null, '<!doctype html><h1>找到对应的多个模版</h1>' +
+            res.send('<!doctype html><h1>找到对应的多个模版</h1>' +
                 '<p>自动解决模板路径在以下文件中找到多个对应的模版，请确保 url 与模版路径无冲突或在 router/hook 指定模版路径。</p>' +
                 '<dl><dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
                 '<dt>files</dt><dd>'+ err.files.join('<br>') + '</dd></dl>');

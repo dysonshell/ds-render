@@ -7,7 +7,8 @@
     "index.js"
   ],
   "scripts": {
-    "test": "tape test/cases/*.js"
+    "test": "prove --exec ./node_modules/.bin/tape test/cases/*.js",
+    "tape-all": "tape test/cases/*.js"
   },
   "repository": {
     "type": "git",
@@ -30,7 +31,7 @@
   "dependencies": {
     "@ds/base": "*",
     "@ds/cccglob": "^2.0.0",
-    "@ds/common": "^2.1.1",
+    "@ds/common": "^2.2.0",
     "@ds/nrequire": "^1.2.0",
     "co": "^4.5.2",
     "errs": "^0.3.2",

@@ -1,6 +1,6 @@
 'use strict';
 var tape = require('tape');
-var app = require('./example')();
+var app = require('../example')();
 var request = require('supertest');
 
 app.use(app.dsRenderMiddleware);
@@ -29,6 +29,6 @@ tape('partial/deep', function (test) {
                 console.error(err);
             }
             test.notOk(err);
-            test.equal(res.text.trim(), 'deep partial');
+            test.equal(res.text.trim(), 'deep partial partial in testc tc.d');
         });
 });
