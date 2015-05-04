@@ -30,9 +30,8 @@
   },
   "dependencies": {
     "@ds/base": "*",
-    "@ds/cccglob": "^2.0.0",
-    "@ds/common": "^2.2.0",
-    "@ds/nrequire": "^1.2.0",
+    "@ds/cccglob": "^3.0.0",
+    "@ds/common": "*",
     "co": "^4.5.2",
     "errs": "^0.3.2",
     "errto": "^0.2.1",
