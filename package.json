@@ -38,7 +38,8 @@
     "express": "^4.12.3",
     "fn-unary": "^1.0.0",
     "glob": "^5.0.5",
-    "rev-rewriter": "^1.1.0"
+    "rev-rewriter": "^1.1.0",
+    "xtend": "^4.0.0"
   },
   "engines": {
     "node": "^1.0.0"
