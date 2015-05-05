@@ -34,10 +34,35 @@ var viewPathReg = /\/(ccc|node_modules\/@ccc)\/([^\/]+)\/views\//;
 
 exports = module.exports = augmentApp;
 
+exports.replaceMainContainer = replaceMainContainer;
+
+function replaceMainContainer(lt, vt) {
+    lt = JSON.parse(JSON.stringify(lt));
+
+    function replace(node) {
+        if (node.t === 7 && node.e === 'div' &&
+            node.a && node.a.id === 'main-container') {
+            node.f = vt.t;
+            return true;
+        }
+    }
+
+    function dfs(f) {
+        for (var i = -1, node; node = f[++i];) {
+            if (node.t !== 7) continue;
+            if (replace(node)) return true;
+            if (node.f && node.f.length && dfs(node.f)) return true;
+        }
+    }
+    if (!dfs(lt.t)) {
+        throw new Error('MAIN_CONTAINER_NOT_FOUND');
+    }
+    return lt;
+}
+
 exports.getParsedPartials = getParsedPartials;
 
 function getParsedPartials(viewPath) {
-    console.log('gpp', viewPath);
     var match = (viewPath || '').match(viewPathReg);
     if (!match) {
         return Promise.reject(new Error('viewPath should be in either ccc/*/views/ or node_modules/@ccc/*/views/'));
@@ -51,7 +76,6 @@ function getParsedPartials(viewPath) {
                 return file.substring(prefix.length);
             });
         var p = {};
-        console.log('files', files);
         files.forEach(function (filename) {
             var partialName = filename.replace(htmlExtReg, '');
             p[partialName] = Promise.resolve(require.resolve(filename))
@@ -68,7 +92,6 @@ function getParsedPartials(viewPath) {
 exports.getParsedTemplate = getParsedTemplate;
 
 function getParsedTemplate(filePath) {
-console.log('gpt', filePath);
     return readFile(filePath, 'utf-8')
         .then(function (template) {
             return Ractive.parse(template, {
@@ -116,9 +139,9 @@ function augmentApp(app, opts) {
     }
     app.set('views', []);;
 
-    var getViewPath = co.wrap(function *(res) {
+    var findPath = co.wrap(function *(prop, notFoundMessage, res) {
         var m = res.req.hookFactoryModule || res.req.routerFactoryModule;
-        var vp = (res.viewPath || res.req.path).replace(/^\/|\/$/g, '');
+        var vp = (res[prop] || res.req.path).replace(/^\/|\/$/g, '');
         var viewPath = vp.match(/\.html$/) ? vp : vp + '.html';
         if (viewPath.indexOf('ccc/') === 0) {
             return require.resolve(viewPath);
@@ -128,8 +151,6 @@ function augmentApp(app, opts) {
         }
         var files = (yield cccglob.bind(null, 'ccc/*/views/' + viewPath))
             .map(require.resolve);
-        console.log('files', files);
-        console.log('files.length', files.length);
         if (files.length !== 1) {
             var errobj = {
                 viewPath: '/' + vp,
@@ -139,7 +160,7 @@ function augmentApp(app, opts) {
                 errobj.filename = m.filename;
             }
             if (files.length === 0) {
-                errobj.message = 'VIEW_NOT_FOUND';
+                errobj.message = notFoundMessage;
                 errobj.statusCode = 404;
             } else if (files.length > 1) {
                 errobj.message = 'FOUND_CONFLICTS';
@@ -149,12 +170,14 @@ function augmentApp(app, opts) {
         return files[0];
     });
 
+    var getViewPath = findPath.bind(null, 'viewPath', 'VIEW_NOT_FOUND');
+    var getLayoutPath = findPath.bind(null, 'layout', 'LAYOUT_NOT_FOUND');
+
     function getView(viewPath) {
         var cache = app.enabled('view cache') ? (app.cache || (app.cache = {})) : false;
         if (cache && (view = cache[viewPath])) {
             return view;
         }
-        console.log('getView', viewPath);
         var view = {
             path: viewPath
         };
@@ -189,13 +212,28 @@ function augmentApp(app, opts) {
             locals = vp || {};
         }
         var viewPath = yield getViewPath(res);
-        locals = locals || {};
-
-        console.log('rendr viewPath', viewPath);
-        var args = yield [getView(viewPath), res.preRenderLocals(locals)];
-        console.log(args);
-
-        return renderView.apply(null, args);
+        var view = yield getView(viewPath);
+        var layoutPath;
+        var layout;
+        if (res.layout) {
+            layoutPath = yield getLayoutPath(res);
+            layout = yield getView(layoutPath);
+            if (!app.enabled('view cache')) {
+                view.template = replaceMainContainer(
+                    layout.template, view.template
+                );
+            } else {
+                var layoutWrapped = view.layoutWrapped || (view.layoutWrapped = {});
+                if (layoutWrapped[layoutPath]) {
+                    view = layoutWrapped[layoutPath];
+                } else {
+                    view = layoutWrapped[layoutPath] = xtend(view, {
+                        template: replaceMainContainer(layoutView.template, view.template)
+                    });
+                }
+            }
+        }
+        return renderView(view, res.preRenderLocals(locals));
     });
 
     app.response.render = function () {
@@ -236,7 +274,6 @@ function augmentApp(app, opts) {
 
     app.use(function (err, req, res, next) {
         // 处理所有接到的 err，要用 app.use 才行（否则只能接到同一 router 的 err）
-        console.log(err.statusCode);
         if (typeof err.statusCode === 'number') {
             res.status(err.statusCode);
         }
@@ -244,14 +281,10 @@ function augmentApp(app, opts) {
             res.status(500);
         }
         res.viewPath = '' + res.statusCode;
-        console.log(err);
         return getViewPath(res).then(function (viewPath) {
-            console.log('y', arguments);
             // 重试显示自定义错误页面
             res.render();
         }).catch(function () {
-            console.log(arguments);
-            console.log('ee', err);
             next(err);
         });
     });
