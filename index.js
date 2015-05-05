@@ -149,7 +149,6 @@ function augmentApp(app, opts) {
         var viewPath = getViewPath(res, prop);
         var errobj = {
             viewPath: viewPath,
-            files: files,
         };
         var result;
         try {
@@ -180,6 +179,7 @@ function augmentApp(app, opts) {
                 errobj.message = notFoundMessage;
                 errobj.statusCode = 404;
             } else if (files.length > 1) {
+                errobj.files = files;
                 errobj.message = 'FOUND_CONFLICTS';
             }
             throw errs.create(errobj);
@@ -306,7 +306,6 @@ function augmentApp(app, opts) {
     });
 
     app.use(function (err, req, res, next) {
-        console.log(err);
         // 处理所有接到的 err，要用 app.use 才行（否则只能接到同一 router 的 err）
         if (typeof err.statusCode === 'number') {
             res.status(err.statusCode);
