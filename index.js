@@ -10,6 +10,7 @@ var unary = require('fn-unary');
 var co = require('co');
 var errto = require('errto');
 var errs = require('errs');
+var xtend = require('xtend');
 
 var htmlExtReg = /\.html$/i;
 
@@ -139,23 +140,39 @@ function augmentApp(app, opts) {
     }
     app.set('views', []);;
 
+    function getViewPath(res, prop) {
+        var vp = (res[prop] || res.req.path).replace(/^\/|\/$/g, '');
+        return vp.replace(/\.html$/, '');
+    }
     var findPath = co.wrap(function *(prop, notFoundMessage, res) {
         var m = res.req.hookFactoryModule || res.req.routerFactoryModule;
-        var vp = (res[prop] || res.req.path).replace(/^\/|\/$/g, '');
-        var viewPath = vp.match(/\.html$/) ? vp : vp + '.html';
-        if (viewPath.indexOf('ccc/') === 0) {
-            return require.resolve(viewPath);
+        var viewPath = getViewPath(res, prop);
+        var errobj = {
+            viewPath: viewPath,
+            files: files,
+        };
+        var result;
+        try {
+            if (viewPath.indexOf('ccc/') === 0) {
+                result = require.resolve(viewPath + '.html');
+            } else if (m) {
+                result = m.resolve('./views/' + viewPath + '.html');
+            }
+        } catch(e) {
+            if (e.code === 'MODULE_NOT_FOUND') {
+                errobj.message = notFoundMessage;
+                errobj.statusCode = 404;
+                throw errs.create(errobj);
+            } else {
+                throw e;
+            }
         }
-        if (m) {
-            return m.resolve('./views/' + viewPath);
+        if (result) {
+            return result;
         }
-        var files = (yield cccglob.bind(null, 'ccc/*/views/' + viewPath))
+        var files = (yield cccglob.bind(null, 'ccc/*/views/' + viewPath + '.html'))
             .map(require.resolve);
         if (files.length !== 1) {
-            var errobj = {
-                viewPath: '/' + vp,
-                files: files,
-            };
             if (m) {
                 errobj.filename = m.filename;
             }
@@ -170,8 +187,24 @@ function augmentApp(app, opts) {
         return files[0];
     });
 
-    var getViewPath = findPath.bind(null, 'viewPath', 'VIEW_NOT_FOUND');
-    var getLayoutPath = findPath.bind(null, 'layout', 'LAYOUT_NOT_FOUND');
+    var tryViewPath = findPath.bind(null, 'viewPath', 'VIEW_NOT_FOUND');
+    var findViewPath = co.wrap(function *(res) {
+        var oe;
+        return tryViewPath(res)
+            .catch(function (e) {
+                if (e.message !== 'VIEW_NOT_FOUND') {
+                    throw e;
+                }
+                oe = e;
+                return tryViewPath(xtend(res, {
+                    viewPath: getViewPath(res, 'viewPath') + '/index.html'
+                }));
+            })
+            .catch(function (e) {
+                throw oe || e;
+            });
+    });
+    var findLayoutPath = findPath.bind(null, 'layout', 'LAYOUT_NOT_FOUND');
 
     function getView(viewPath) {
         var cache = app.enabled('view cache') ? (app.cache || (app.cache = {})) : false;
@@ -211,12 +244,12 @@ function augmentApp(app, opts) {
         } else {
             locals = vp || {};
         }
-        var viewPath = yield getViewPath(res);
+        var viewPath = yield findViewPath(res);
         var view = yield getView(viewPath);
         var layoutPath;
         var layout;
         if (res.layout) {
-            layoutPath = yield getLayoutPath(res);
+            layoutPath = yield findLayoutPath(res);
             layout = yield getView(layoutPath);
             if (!app.enabled('view cache')) {
                 view.template = replaceMainContainer(
@@ -273,6 +306,7 @@ function augmentApp(app, opts) {
     });
 
     app.use(function (err, req, res, next) {
+        console.log(err);
         // 处理所有接到的 err，要用 app.use 才行（否则只能接到同一 router 的 err）
         if (typeof err.statusCode === 'number') {
             res.status(err.statusCode);
@@ -281,7 +315,7 @@ function augmentApp(app, opts) {
             res.status(500);
         }
         res.viewPath = '' + res.statusCode;
-        return getViewPath(res).then(function (viewPath) {
+        return findViewPath(res).then(function (viewPath) {
             // 重试显示自定义错误页面
             res.render();
         }).catch(function () {
