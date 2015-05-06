@@ -7,8 +7,7 @@
     "index.js"
   ],
   "scripts": {
-    "test": "prove --exec ./node_modules/.bin/tape test/cases/*.js",
-    "tape-all": "tape test/cases/*.js"
+    "test": "rm -rf coverage/ && prove --exec \"`which istanbul` cover --include-pid --report none --print none\" test/cases/*.js && istanbul report"
   },
   "repository": {
     "type": "git",
@@ -25,6 +24,7 @@
     "express": "*"
   },
   "devDependencies": {
+    "istanbul-harmony": "^0.3.12",
     "supertest": "^0.15.0",
     "tape": "^4.0.0"
   },
