@@ -7,7 +7,7 @@
     "index.js"
   ],
   "scripts": {
-    "test": "rm -rf coverage/ && prove --exec \"`which istanbul` cover --include-pid --report none --print none\" test/cases/*.js && istanbul report"
+    "test": "rm -rf coverage/ && prove --exec \"istanbul cover --include-pid --report none --print none\" test/cases/*.js && istanbul report --report cobertura --report html --report text-summary"
   },
   "repository": {
     "type": "git",
@@ -19,8 +19,8 @@
   "author": "undoZen <opensource@undozen.com>",
   "license": "private",
   "peerDependencies": {
-    "@ds/base": "*",
     "@ds/common": "*",
+    "@ds/cccglob": "*",
     "express": "*"
   },
   "devDependencies": {
@@ -29,8 +29,7 @@
     "tape": "^4.0.0"
   },
   "dependencies": {
-    "@ds/base": "*",
-    "@ds/cccglob": "^3.0.0",
+    "@ds/cccglob": "*",
     "@ds/common": "*",
     "co": "^4.5.2",
     "errs": "^0.3.2",
