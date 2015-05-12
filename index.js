@@ -206,7 +206,7 @@ function augmentApp(app, opts) {
     });
     var findLayoutPath = findPath.bind(null, 'layout', 'LAYOUT_NOT_FOUND');
 
-    function getView(viewPath) {
+    var getView = co.wrap(function *(viewPath) {
         var cache = app.enabled('view cache') ? (app.cache || (app.cache = {})) : false;
         if (cache && (view = cache[viewPath])) {
             return view;
@@ -214,11 +214,12 @@ function augmentApp(app, opts) {
         var view = {
             path: viewPath
         };
+        view = yield preRenderView(view);
         if (cache) {
             cache[viewPath] = cache[view.path] = view;
         }
-        return preRenderView(view);
-    }
+        return view;
+    });
 
     app.response.preRenderLocals = function (locals) {
         var res = this;
@@ -261,7 +262,7 @@ function augmentApp(app, opts) {
                     view = layoutWrapped[layoutPath];
                 } else {
                     view = layoutWrapped[layoutPath] = xtend(view, {
-                        template: replaceMainContainer(layoutView.template, view.template)
+                        template: replaceMainContainer(layout.template, view.template)
                     });
                 }
             }
