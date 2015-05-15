@@ -4,6 +4,7 @@ require('@ds/common');
 var fs = require('fs');
 var assert = require('assert');
 var path = require('path');
+var resolveFilename = require('module')._resolveFilename;
 var glob = require('glob');
 var cccglob = require('@ds/cccglob');
 var unary = require('fn-unary');
@@ -155,7 +156,7 @@ function augmentApp(app, opts) {
             if (viewPath.indexOf('ccc/') === 0) {
                 result = require.resolve(viewPath + '.html');
             } else if (m) {
-                result = m.resolve('./views/' + viewPath + '.html');
+                result = resolveFilename('./views/' + viewPath + '.html', m);
             }
         } catch(e) {
             if (e.code === 'MODULE_NOT_FOUND') {
