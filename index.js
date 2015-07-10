@@ -124,11 +124,14 @@ var renderView = exports.renderView = co.wrap(function *(view, data) {
     view = yield preRenderView(view);
     data = yield Promise.props(yield Promise.resolve(data || {}));
     // data 可以整个是 promise，也可以其中某些属性是 promise
-    return (new Ractive({
+    var ractive = new Ractive({
         partials: view.partials,
         template: view.template,
         data: data
-    })).toHTML();
+    });
+    var html = ractive.toHTML();
+    yield ractive.teardown();
+    return html;
 });
 
 exports.augmentApp = augmentApp;
