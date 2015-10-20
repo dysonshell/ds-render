@@ -250,6 +250,10 @@ function augmentApp(app, opts) {
             locals = vp || {};
         }
         var viewPath = yield findViewPath(res);
+        if (typeof res.expose === 'function') {
+            var exposedViewPath = viewPath.split('/views/').slice(1).join('/views/').replace(/\.html$/i, '');
+            res.expose(exposedViewPath, 'viewPath');
+        }
         var view = yield getView(viewPath);
         var layoutPath;
         var layout;
