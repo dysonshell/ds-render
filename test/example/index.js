@@ -1,9 +1,6 @@
 'use strict';
 var path = require('path');
-require('@ds/nrequire');
-require('@ds/common');
-Ractive.DEBUG = false;
-console.log(APP_ROOT);
+require('ractive').DEBUG = false;
 var app = exports = module.exports = require('express')();
 app.set('root', __dirname);
 

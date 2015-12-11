@@ -1,12 +1,14 @@
 'use strict';
 var path = require('path');
+process.env.NODE_CONFIG_DIR = path.resolve(__dirname, '..', 'example', 'config');
 var tape = require('tape');
 var co = require('co');
-GLOBAL.APP_ROOT = path.resolve(__dirname, '../example');
 // var app = require('../example');
 var render = require('../../');
-Ractive.DEBUG = false;
+require('ractive').DEBUG = false;
 
+console.log(process.env.NODE_CONFIG_DIR);
+var APP_ROOT = require('config').dsAppRoot;
 tape('parse', function (test) {
     test.plan(3);
     co(function *() {

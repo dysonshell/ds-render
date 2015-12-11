@@ -1,17 +1,26 @@
 'use strict';
-require('@ds/nrequire');
-require('@ds/common');
+var path = require('path');
 var fs = require('fs');
 var assert = require('assert');
-var path = require('path');
+require('ds-nrequire');
+var dsGlob = require('ds-glob');
+var config = require('config');
 var resolveFilename = require('module')._resolveFilename;
 var glob = require('glob');
-var cccglob = require('@ds/cccglob');
 var unary = require('fn-unary');
 var co = require('co');
 var errto = require('errto');
 var errs = require('errs');
 var xtend = require('xtend');
+var Ractive = require('ractive');
+var Promise = require('bluebird');
+var _ = require('lodash');
+
+// config
+var APP_ROOT = config.dsAppRoot;
+var DSC = config.dsComponentPrefix || 'dsc';
+var DSCns = DSC.replace(/^\/+/, '').replace(/\/+$/, '');
+DSC = DSCns + '/';
 
 var htmlExtReg = /\.html$/i;
 
@@ -32,7 +41,7 @@ function exists(filePath) {
     });
 }
 
-var viewPathReg = /\/(ccc|node_modules\/@ccc)\/([^\/]+)\/views\//;
+var viewPathReg = new RegExp('\\\/('+DSCns+'|node_modules\\\/@'+DSCns+')\\\/([^\\\/]+)\\\/views\\\/');
 
 exports = module.exports = augmentApp;
 
@@ -67,13 +76,13 @@ exports.getParsedPartials = getParsedPartials;
 function getParsedPartials(viewPath) {
     var match = (viewPath || '').match(viewPathReg);
     if (!match) {
-        return Promise.reject(new Error('viewPath should be in either ccc/*/views/ or node_modules/@ccc/*/views/'));
+        return Promise.reject(new Error('viewPath should be in either ${DSC}/*/views/ or node_modules/@${DSC}/*/views/'));
     }
 
     var componentName = match[2];
-    var prefix = 'ccc/' + componentName + '/partials/';
+    var prefix = DSC + componentName + '/partials/';
     return co(function * () {
-        var files = (yield cccglob.bind(null, 'ccc/*/partials/**/*.html'));
+        var files = (yield dsGlob.bind(null, DSC + '*/partials/**/*.html'));
             [].map(function(file) {
                 return file.substring(prefix.length);
             });
@@ -156,7 +165,7 @@ function augmentApp(app, opts) {
         };
         var result;
         try {
-            if (viewPath.indexOf('ccc/') === 0) {
+            if (viewPath.indexOf(DSC) === 0) {
                 result = require.resolve(viewPath + '.html');
             } else if (m) {
                 result = resolveFilename('./views/' + viewPath + '.html', m);
@@ -173,7 +182,7 @@ function augmentApp(app, opts) {
         if (result) {
             return result;
         }
-        var files = (yield cccglob.bind(null, 'ccc/*/views/' + viewPath + '.html'))
+        var files = (yield dsGlob.bind(null, DSC + '*/views/' + viewPath + '.html'))
             .map(require.resolve);
         if (files.length !== 1) {
             if (m) {

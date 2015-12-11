@@ -1,5 +1,7 @@
 'use strict';
 var path = require('path');
+process.env.NODE_CONFIG_DIR = path.resolve(__dirname, '..', 'example', 'config');
+var path = require('path');
 var tape = require('tape');
 var app = require('../example');
 var request = require('supertest');

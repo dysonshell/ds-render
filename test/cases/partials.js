@@ -1,4 +1,6 @@
 'use strict';
+var path = require('path');
+process.env.NODE_CONFIG_DIR = path.resolve(__dirname, '..', 'example', 'config');
 var tape = require('tape');
 var app = require('../example');
 require('../../')(app);

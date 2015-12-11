@@ -7,7 +7,8 @@
     "index.js"
   ],
   "scripts": {
-    "test": "rm -rf coverage/ && prove --exec \"istanbul cover --include-pid --report none --print none\" test/cases/*.js && istanbul report --report cobertura --report html --report text-summary"
+    "test": "rm -rf coverage/ && prove --exec \"istanbul cover --include-pid --report none --print none\" test/cases/*.js && istanbul report --report cobertura --report html --report text-summary",
+    "test-watch": "nodemon -w test/ -w index.js --exec \"tape test/cases/*.js\""
   },
   "repository": {
     "type": "git",
@@ -19,8 +20,7 @@
   "author": "undoZen <opensource@undozen.com>",
   "license": "private",
   "peerDependencies": {
-    "@ds/common": "*",
-    "@ds/cccglob": "*",
+    "ds-glob": "*",
     "express": "*"
   },
   "devDependencies": {
@@ -29,14 +29,18 @@
     "tape": "^4.0.0"
   },
   "dependencies": {
-    "@ds/cccglob": "*",
-    "@ds/common": "*",
-    "co": "^4.5.2",
+    "bluebird": "^3",
+    "co": "^4",
+    "config": "^1",
+    "ds-glob": "^1.0.3",
+    "ds-nrequire": "^1.0.4",
     "errs": "^0.3.2",
     "errto": "^0.2.1",
-    "express": "^4.12.3",
-    "fn-unary": "^1.0.0",
-    "glob": "^5.0.5",
+    "express": "^4",
+    "fn-unary": "^1",
+    "glob": "^6",
+    "lodash": "^3.10.1",
+    "ractive": "^0.7.3",
     "rev-rewriter": "^1.1.0",
     "xtend": "^4.0.0"
   },
