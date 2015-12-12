@@ -35,57 +35,27 @@ function readFile(filePath) {
     });
 }
 
-function exists(filePath) {
-    return new Promise(function (resolve) {
-        fs.exists(filePath, resolve);
-    });
-}
-
 var viewPathReg = new RegExp('\\\/('+DSCns+'|node_modules\\\/@'+DSCns+')\\\/([^\\\/]+)\\\/views\\\/');
+var componentPathReg = new RegExp('\\\/('+DSCns+'|node_modules\\\/@'+DSCns+')\\\/([^\\\/]+)\\\/');
 
 exports = module.exports = augmentApp;
 
-exports.replaceMainContainer = replaceMainContainer;
-
-function replaceMainContainer(lt, vt) {
-    lt = JSON.parse(JSON.stringify(lt));
-
-    function replace(node) {
-        if (node.t === 7 && node.e === 'div' &&
-            node.a && node.a.id === 'main-container') {
-            node.f = vt.t;
-            return true;
-        }
+exports.getComponentName = getComponentName;
+function getComponentName(viewPath, isView) {
+    var match = (viewPath || '').match(isView ? viewPathReg : componentPathReg);
+    if (!match) {
+        return Promise.reject(new Error('dsViewPath should be in either ${DSC}/*/views/ or node_modules/@${DSC}/*/views/'));
     }
-
-    function dfs(f) {
-        for (var i = -1, node; node = f[++i];) {
-            if (node.t !== 7) continue;
-            if (replace(node)) return true;
-            if (node.f && node.f.length && dfs(node.f)) return true;
-        }
-    }
-    if (!dfs(lt.t)) {
-        throw new Error('MAIN_CONTAINER_NOT_FOUND');
-    }
-    return lt;
+    return match[2];
 }
 
 exports.getParsedPartials = getParsedPartials;
 
 function getParsedPartials(viewPath) {
-    var match = (viewPath || '').match(viewPathReg);
-    if (!match) {
-        return Promise.reject(new Error('dsViewPath should be in either ${DSC}/*/views/ or node_modules/@${DSC}/*/views/'));
-    }
-
-    var componentName = match[2];
+    var componentName = getComponentName(viewPath, true);
     var prefix = DSC + componentName + '/partials/';
     return co(function * () {
         var files = (yield dsGlob.bind(null, DSC + '*/partials/**/*.html'));
-            [].map(function(file) {
-                return file.substring(prefix.length);
-            });
         var p = {};
         files.forEach(function (filename) {
             var partialName = filename.replace(htmlExtReg, '');
@@ -129,29 +99,41 @@ function preRenderView(view) {
     }).then(_.assign.bind(null, view));
 }
 
-var renderView = exports.renderView = co.wrap(function *(view, data) {
+var renderView = exports.renderView = co.wrap(function *(view, layout, data) {
     view = yield preRenderView(view);
     data = yield Promise.props(yield Promise.resolve(data || {}));
     // data 可以整个是 promise，也可以其中某些属性是 promise
-    var ractive = new Ractive({
-        partials: view.partials,
-        template: view.template,
-        data: data
-    });
+    var ractive;
+    if (layout) {
+        ractive = new Ractive({
+            partials: layout.partials,
+            template: layout.template,
+            components: {
+                dsBody: Ractive.extend({ // TODO: stress, cache
+                    partials: view.partials,
+                    template: view.template,
+                    data: function () {
+                        return data;
+                    },
+                }),
+            },
+            data: data,
+        });
+    } else {
+        ractive = new Ractive({
+            partials: view.partials,
+            template: view.template,
+            data: data,
+        });
+    }
     var html = ractive.toHTML();
     yield ractive.teardown();
     return html;
 });
 
 exports.augmentApp = augmentApp;
-function augmentApp(app, opts) {
-    opts = opts || {};
-    var appRoot = app.set('root') || opts.appRoot;
-    assert(appRoot);
-    if (!GLOBAL.APP_ROOT) {
-        GLOBAL.APP_ROOT = appRoot;
-    }
-    app.set('views', []);;
+function augmentApp(app) {
+    app.set('views', []);
 
     var findPath = co.wrap(function *(notFoundMessage, res, viewPath) {
         var m = res.req.routerFactoryModule;
@@ -159,19 +141,15 @@ function augmentApp(app, opts) {
         var errobj = {
             viewPath: viewPath,
         };
-        var result, parts, component;
+        var result, parts, componentName;
         try {
             if (viewPath.indexOf(DSC) === 0) {
                 result = require.resolve(viewPath + '.html');
             } else if (!m && !viewPath) { // should render index
                 result = require.resolve(DSC + 'index/views/index.html');
             } else if (m) {
-                component = m.filename
-                    .substring(APP_ROOT.length).replace(/^\/+/, '')
-                    .substring(DSC.length)
-                    .split('/')
-                    .shift();
-                result = resolveFilename(DSC + component + '/views/' + viewPath + '.html', m);
+                componentName = getComponentName(m.filename)
+                result = resolveFilename(DSC + componentName + '/views/' + viewPath + '.html', m);
             } else { // no router, find by first part of req.path
                 parts = viewPath.split('/');
                 parts.splice(1, 0, 'views');
@@ -253,32 +231,29 @@ function augmentApp(app, opts) {
             locals = vp || {};
         }
         var viewPath = yield findViewPath(res, locals);
-        if (typeof res.expose === 'function') {
-            var exposedViewPath = viewPath.split('/views/').slice(1).join('/views/').replace(/\.html$/i, '');
-            res.expose(exposedViewPath, 'viewPath');
-        }
         var view = yield getView(viewPath);
-        var layoutPath;
-        var layout;
-        if (res.layout) {
-            layoutPath = yield findLayoutPath(res);
-            layout = yield getView(layoutPath);
-            if (!app.enabled('view cache')) {
-                view.template = replaceMainContainer(
-                    layout.template, view.template
-                );
-            } else {
-                var layoutWrapped = view.layoutWrapped || (view.layoutWrapped = {});
-                if (layoutWrapped[layoutPath]) {
-                    view = layoutWrapped[layoutPath];
-                } else {
-                    view = layoutWrapped[layoutPath] = xtend(view, {
-                        template: replaceMainContainer(layout.template, view.template)
-                    });
-                }
+        var vt = view.template.t;
+        var dsLayoutPath, layoutPath, layout, fe;
+        if (vt[0].t === 7 && vt[0].e === 'dsLayout') {
+           fe = vt.shift();
+        }
+        if (fe && fe.a && fe.a.path) {
+            if (typeof fe.a.path === 'string') {
+                dsLayoutPath = yield Promise.resolve(fe.a.path);
+            } else if (fe.a.path.length === 1 && fe.a.path[0].t === 2 && typeof fe.a.path[0].r === 'string') {
+                dsLayoutPath = yield Promise.resolve(locals[fe.a.path[0].r] ||
+                    res.locals[fe.a.path[0].r] ||
+                    app.locals[fe.a.path[0].r]);
             }
         }
-        return renderView(view, res.preRenderLocals(locals));
+        if (dsLayoutPath) {
+            layoutPath = yield findLayoutPath(res, dsLayoutPath);
+            layout = yield getView(layoutPath);
+        }
+        if (typeof vt[0] === 'string' && !vt[0].trim()) {
+            vt.shift();
+        }
+        return renderView(view, layout, res.preRenderLocals(locals));
     });
 
     app.response.render = function () {
@@ -317,8 +292,6 @@ function augmentApp(app, opts) {
         return findViewPath(res).then(function (viewPath) {
             // 重试显示自定义错误页面
             res.render();
-        }).catch(function () {
-            next(err);
-        });
+        }).catch(next);
     });
 }

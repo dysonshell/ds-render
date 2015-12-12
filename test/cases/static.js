@@ -29,7 +29,7 @@ tape('render', function (test) {
     test.plan(1);
     co(function *() {
         var viewPath = APP_ROOT + '/ccc/testc/views/ccc.html';
-        var html = yield render.renderView({path: viewPath}, Promise.resolve({
+        var html = yield render.renderView({path: viewPath}, void 0, Promise.resolve({
             lv: 'local variable',
             pv: Promise.resolve('promised variable')
         }));
