@@ -1,6 +1,6 @@
 {
-  "name": "@ds/render",
-  "version": "3.4.0",
+  "name": "ds-render",
+  "version": "0.0.0",
   "description": "render module for dysonshell",
   "main": "index.js",
   "files": [
@@ -12,13 +12,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "ssh://git@gitlab.creditcloud.com:10022/undozen/ds-render.git"
+    "url": "ssh://git@github.com/dysonshell/ds-render.git"
   },
   "keywords": [
     "render"
   ],
   "author": "undoZen <opensource@undozen.com>",
-  "license": "private",
+  "license": "MIT",
   "peerDependencies": {
     "ds-glob": "*",
     "express": "*"
@@ -45,6 +45,6 @@
     "xtend": "^4.0.0"
   },
   "engines": {
-    "node": "^1.0.0"
+    "node": ">=4"
   }
 }
