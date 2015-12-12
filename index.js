@@ -76,7 +76,7 @@ exports.getParsedPartials = getParsedPartials;
 function getParsedPartials(viewPath) {
     var match = (viewPath || '').match(viewPathReg);
     if (!match) {
-        return Promise.reject(new Error('viewPath should be in either ${DSC}/*/views/ or node_modules/@${DSC}/*/views/'));
+        return Promise.reject(new Error('dsViewPath should be in either ${DSC}/*/views/ or node_modules/@${DSC}/*/views/'));
     }
 
     var componentName = match[2];
@@ -153,22 +153,29 @@ function augmentApp(app, opts) {
     }
     app.set('views', []);;
 
-    function getViewPath(res, prop) {
-        var vp = (res[prop] || res.req.path).replace(/^\/|\/$/g, '');
-        return vp.replace(/\.html$/, '');
-    }
-    var findPath = co.wrap(function *(prop, notFoundMessage, res) {
-        var m = res.req.hookFactoryModule || res.req.routerFactoryModule;
-        var viewPath = getViewPath(res, prop);
+    var findPath = co.wrap(function *(notFoundMessage, res, viewPath) {
+        var m = res.req.routerFactoryModule;
+        // e.g. "/app/web/dsc/account/routes/page.js"
         var errobj = {
             viewPath: viewPath,
         };
-        var result;
+        var result, parts, component;
         try {
             if (viewPath.indexOf(DSC) === 0) {
                 result = require.resolve(viewPath + '.html');
+            } else if (!m && !viewPath) { // should render index
+                result = require.resolve(DSC + 'index/views/index.html');
             } else if (m) {
-                result = resolveFilename('./views/' + viewPath + '.html', m);
+                component = m.filename
+                    .substring(APP_ROOT.length).replace(/^\/+/, '')
+                    .substring(DSC.length)
+                    .split('/')
+                    .shift();
+                result = resolveFilename(DSC + component + '/views/' + viewPath + '.html', m);
+            } else { // no router, find by first part of req.path
+                parts = viewPath.split('/');
+                parts.splice(1, 0, 'views');
+                result = require.resolve(DSC + parts.join('/') + '.html');
             }
         } catch(e) {
             if (e.code === 'MODULE_NOT_FOUND') {
@@ -179,45 +186,26 @@ function augmentApp(app, opts) {
                 throw e;
             }
         }
-        if (result) {
-            return result;
-        }
-        var files = (yield dsGlob.bind(null, DSC + '*/views/' + viewPath + '.html'))
-            .map(require.resolve);
-        if (files.length !== 1) {
-            if (m) {
-                errobj.filename = m.filename;
-            }
-            if (files.length === 0) {
-                errobj.message = notFoundMessage;
-                errobj.statusCode = 404;
-            } else if (files.length > 1) {
-                errobj.files = files;
-                errobj.message = 'FOUND_CONFLICTS';
-            }
-            throw errs.create(errobj);
-        }
-        return files[0];
+        return result;
     });
 
-    var tryViewPath = findPath.bind(null, 'viewPath', 'VIEW_NOT_FOUND');
-    var findViewPath = co.wrap(function *(res) {
+    var tryViewPath = findPath.bind(null, 'VIEW_NOT_FOUND');
+    var findViewPath = co.wrap(function *(res, locals) {
+        var viewPath = yield res.preRenderViewLocals(locals);
         var oe;
-        return tryViewPath(res)
+        return tryViewPath(res, viewPath)
             .catch(function (e) {
                 if (e.message !== 'VIEW_NOT_FOUND') {
                     throw e;
                 }
                 oe = e;
-                return tryViewPath(xtend(res, {
-                    viewPath: getViewPath(res, 'viewPath') + '/index.html'
-                }));
+                return tryViewPath(res, viewPath + '/index');
             })
             .catch(function (e) {
                 throw oe || e;
             });
     });
-    var findLayoutPath = findPath.bind(null, 'layout', 'LAYOUT_NOT_FOUND');
+    var findLayoutPath = findPath.bind(null, 'LAYOUT_NOT_FOUND');
 
     var getView = co.wrap(function *(viewPath) {
         var cache = app.enabled('view cache') ? (app.cache || (app.cache = {})) : false;
@@ -234,31 +222,37 @@ function augmentApp(app, opts) {
         return view;
     });
 
+    app.response.preRenderViewLocals = function (locals) {
+        var res = this;
+        var app = res.app;
+        var req = res.req;
+        locals = locals || {};
+
+        return Promise.resolve(
+            locals.dsViewPath ||
+            res.locals.dsViewPath ||
+            app.locals.dsViewPath ||
+            req.path.replace(/^\/|\/$/g, '')
+        ).then(function (vp) { return vp.replace(/\.html$/, ''); });
+    };
+
     app.response.preRenderLocals = function (locals) {
         var res = this;
         var app = res.app;
         locals = locals || {};
 
-        var appLocals = {};
-        if (app.locals.__proto__) { // import from parent-app, but not ancestor-app
-            _.assign(appLocals, app.locals.__proto__);
-        }
-        _.assign(appLocals, app.locals);
-
-        return Promise.props(_.assign(locals, res.locals))
-            .then(function (locals) {
-                return _.assign(appLocals, locals);
-            })
+        return Promise.props(_.assign({}, app.locals, res.locals, locals));
     };
 
     app.response.rendr = co.wrap(function *(vp, locals) {
         var res = this;
         if (typeof vp === 'string') {
-            res.viewPath = vp;
+            locals = locals || {};
+            locals.dsViewPath = vp;
         } else {
             locals = vp || {};
         }
-        var viewPath = yield findViewPath(res);
+        var viewPath = yield findViewPath(res, locals);
         if (typeof res.expose === 'function') {
             var exposedViewPath = viewPath.split('/views/').slice(1).join('/views/').replace(/\.html$/i, '');
             res.expose(exposedViewPath, 'viewPath');
@@ -310,18 +304,6 @@ function augmentApp(app, opts) {
         }
         return res.render()
     });
-    app.use(function (err, req, res, next) {
-        if (err.message === 'FOUND_CONFLICTS') {
-            // 这属于开发过程中的错误，强制显示提示开发者
-            res.status(500);
-            res.send('<!doctype html><h1>找到对应的多个模版</h1>' +
-                '<p>自动解决模板路径在以下文件中找到多个对应的模版，请确保 url 与模版路径无冲突或在 router/hook 指定模版路径。</p>' +
-                '<dl><dt>viewPath</dt><dd>'+ err.viewPath + '</dd>' +
-                '<dt>files</dt><dd>'+ err.files.join('<br>') + '</dd></dl>');
-            return;
-        }
-        next(err);
-    });
 
     app.use(function (err, req, res, next) {
         // 处理所有接到的 err，要用 app.use 才行（否则只能接到同一 router 的 err）
@@ -331,7 +313,7 @@ function augmentApp(app, opts) {
         if (typeof res.statusCode !== 'number' || res.statusCode < 400) {
             res.status(500);
         }
-        res.viewPath = '' + res.statusCode;
+        res.locals.dsViewPath = DSC + 'errors/views/' + res.statusCode;
         return findViewPath(res).then(function (viewPath) {
             // 重试显示自定义错误页面
             res.render();

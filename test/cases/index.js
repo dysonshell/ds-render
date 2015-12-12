@@ -6,7 +6,7 @@ var app = require('../example');
 var request = require('supertest');
 
 app.get('/cc', function (req, res) {
-    res.viewPath = 'ccc/testc/views/c';
+    res.locals.dsViewPath = 'ccc/testc/views/c';
     res.render();
 });
 
@@ -27,7 +27,7 @@ tape('cc index', function (test) {
 tape('c index', function (test) {
     test.plan(2);
     request(app)
-        .get('/c')
+        .get('/testc/c')
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);

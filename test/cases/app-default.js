@@ -1,37 +1,46 @@
 'use strict';
 var path = require('path');
 process.env.NODE_CONFIG_DIR = path.resolve(__dirname, '..', 'example', 'config');
-var path = require('path');
 var tape = require('tape');
 var app = require('../example');
 var request = require('supertest');
 
-app.get('/b', function (req, res, next) {
-    res.locals.dsViewPath = 'ccc/global/views/a';
-    next();
-});
+app.locals.dsViewPath = 'ccc/global/views/a';
 
 require('../../')(app);
 
-tape('partial/a', function (test) {
+tape('root', function (test) {
     test.plan(2);
     request(app)
-        .get('/global/a')
+        .get('/')
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
+            console.log(res.text);
             test.equal(res.text.trim(), 'partial a');
         });
 });
 
-
-tape('partial/b', function (test) {
+tape('default', function (test) {
     test.plan(2);
     request(app)
-        .get('/b')
+        .get('/default')
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
+            console.log(res.text);
+            test.equal(res.text.trim(), 'partial a');
+        });
+});
+
+tape('whatever', function (test) {
+    test.plan(2);
+    request(app)
+        .get('/what/ever')
+        .expect(200)
+        .end(function (err, res) {
+            test.notOk(err);
+            console.log(res.text);
             test.equal(res.text.trim(), 'partial a');
         });
 });

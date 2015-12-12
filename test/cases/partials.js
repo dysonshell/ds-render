@@ -10,7 +10,7 @@ var request = require('supertest');
 tape('partial/a', function (test) {
     test.plan(2);
     request(app)
-        .get('/a')
+        .get('/global/a')
         .expect(200)
         .end(function (err, res) {
             if (err) {
@@ -24,7 +24,7 @@ tape('partial/a', function (test) {
 tape('partial/deep', function (test) {
     test.plan(2);
     request(app)
-        .get('/deep')
+        .get('/global/deep')
         .expect(200)
         .end(function (err, res) {
             if (err) {

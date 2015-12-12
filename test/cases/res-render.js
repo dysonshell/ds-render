@@ -1,16 +1,12 @@
 'use strict';
 var path = require('path');
 process.env.NODE_CONFIG_DIR = path.resolve(__dirname, '..', 'example', 'config');
+require('ds-nrequire')
 var tape = require('tape');
 var app = require('../example');
 var request = require('supertest');
 
-app.get('/a', function (req, res) {
-    res.render();
-});
-app.get('/b', function (req, res) {
-    res.render('a');
-});
+app.use(require('ccc/global/routers/page'));
 app.get('/err', function (req, res, next) {
     next(new Error('TEST_ERR_TMPL'));
 });
@@ -38,6 +34,17 @@ tape('partial/b', function (test) {
         });
 });
 
+tape('partial/c', function (test) {
+    test.plan(2);
+    request(app)
+        .get('/c')
+        .expect(200)
+        .end(function (err, res) {
+            test.notOk(err);
+            test.equal(res.text.trim(), 'partial a');
+        });
+});
+
 tape('not found', function (test) {
     test.plan(2);
     request(app)
@@ -57,16 +64,5 @@ tape('err page', function (test) {
         .end(function (err, res) {
             test.notOk(err);
             test.equal(res.text.trim(), 'error 500');
-        });
-});
-
-tape('conflict', function (test) {
-    test.plan(2);
-    request(app)
-        .get('/ccc')
-        .expect(500)
-        .end(function (err, res) {
-            test.notOk(err);
-            test.equal(res.text.trim().indexOf('<!doctype html><h1>找到对应的多个模版</h1>'), 0);
         });
 });

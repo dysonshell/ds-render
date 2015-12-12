@@ -1,37 +1,33 @@
 'use strict';
 var path = require('path');
 process.env.NODE_CONFIG_DIR = path.resolve(__dirname, '..', 'example', 'config');
-var path = require('path');
 var tape = require('tape');
 var app = require('../example');
 var request = require('supertest');
 
-app.get('/b', function (req, res, next) {
-    res.locals.dsViewPath = 'ccc/global/views/a';
-    next();
-});
-
+app.use('/testc', require('../example/ccc/testc/routers/page'));
 require('../../')(app);
 
-tape('partial/a', function (test) {
+tape('cc index', function (test) {
     test.plan(2);
     request(app)
-        .get('/global/a')
+        .get('/testc/cc')
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), 'partial a');
+            console.log(res.text);
+            test.equal(res.text.trim(), 'partial in testc');
         });
 });
 
-
-tape('partial/b', function (test) {
+tape('c index', function (test) {
     test.plan(2);
     request(app)
-        .get('/b')
+        .get('/testc/d')
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), 'partial a');
+            console.log(res.text);
+            test.equal(res.text.trim(), 'partial in testc');
         });
 });
