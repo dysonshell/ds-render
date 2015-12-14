@@ -106,12 +106,12 @@ var renderView = exports.renderView = co.wrap(function *(view, layout, data) {
     var ractive;
     if (layout) {
         ractive = new Ractive({
-            partials: layout.partials,
-            template: layout.template,
+            partials: view.partials,
+            template: view.template,
             components: {
                 dsBody: Ractive.extend({ // TODO: stress, cache
-                    partials: view.partials,
-                    template: view.template,
+                    partials: layout.partials,
+                    template: layout.template,
                     data: function () {
                         return data;
                     },
@@ -233,25 +233,23 @@ function augmentApp(app) {
         var viewPath = yield findViewPath(res, locals);
         var view = yield getView(viewPath);
         var vt = view.template.t;
-        var dsLayoutPath, layoutPath, layout, fe;
-        if (vt[0].t === 7 && vt[0].e === 'dsLayout') {
-           fe = vt.shift();
-        }
-        if (fe && fe.a && fe.a.path) {
-            if (typeof fe.a.path === 'string') {
-                dsLayoutPath = yield Promise.resolve(fe.a.path);
-            } else if (fe.a.path.length === 1 && fe.a.path[0].t === 2 && typeof fe.a.path[0].r === 'string') {
-                dsLayoutPath = yield Promise.resolve(locals[fe.a.path[0].r] ||
-                    res.locals[fe.a.path[0].r] ||
-                    app.locals[fe.a.path[0].r]);
+        var dsLayoutPath, layoutPath, layout;
+        var fe = vt[0];
+        if (fe && fe.t === 7 && fe.e === 'dsBody' && fe.a && fe.a.layout) {
+            if (typeof fe.a.layout === 'string') {
+                dsLayoutPath = yield Promise.resolve(fe.a.layout);
+            } else if (fe.a.layout.length === 1 && fe.a.layout[0].t === 2 && typeof fe.a.layout[0].r === 'string') {
+                dsLayoutPath = yield Promise.resolve(locals[fe.a.layout[0].r] ||
+                    res.locals[fe.a.layout[0].r] ||
+                    app.locals[fe.a.layout[0].r]);
             }
-        }
-        if (dsLayoutPath) {
-            layoutPath = yield findLayoutPath(res, dsLayoutPath);
-            layout = yield getView(layoutPath);
-        }
-        if (typeof vt[0] === 'string' && !vt[0].trim()) {
-            vt.shift();
+            if (dsLayoutPath) {
+                layoutPath = yield findLayoutPath(res, dsLayoutPath);
+                layout = yield getView(layoutPath);
+            } else {
+                fe = vt.shift();
+                vt.splice.apply(vt, [0, 0].concat(fe.f || []));
+            }
         }
         return renderView(view, layout, res.preRenderLocals(locals));
     });
