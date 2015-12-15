@@ -7,6 +7,7 @@
     "index.js"
   ],
   "scripts": {
+    "precommit": "npm test",
     "test": "rm -rf coverage/ && prove --exec \"istanbul cover --include-pid --report none --print none\" test/cases/*.js && istanbul report --report cobertura --report html --report text-summary",
     "test-watch": "nodemon -w test/ -w index.js --exec \"tape test/cases/*.js\""
   },
@@ -24,6 +25,7 @@
     "express": "*"
   },
   "devDependencies": {
+    "husky": "^0.10.2",
     "istanbul-harmony": "^0.3.12",
     "supertest": "^0.15.0",
     "tape": "^4.0.0"
