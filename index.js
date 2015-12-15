@@ -251,6 +251,10 @@ function augmentApp(app) {
                 vt.splice.apply(vt, [0, 0].concat(fe.f || []));
             }
         }
+        locals.dsViewPathResloved = path.relative(APP_ROOT, view.path).replace(/^node_modules\/@|\.html$/g, ''));
+        if (typeof res.expose === 'function') {
+            res.expose(locals.dsViewPathResloved, 'dsViewPathResloved');
+        }
         return renderView(view, layout, res.preRenderLocals(locals));
     });
 
