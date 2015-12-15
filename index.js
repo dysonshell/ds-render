@@ -251,9 +251,9 @@ function augmentApp(app) {
                 vt.splice.apply(vt, [0, 0].concat(fe.f || []));
             }
         }
-        locals.dsViewPathResloved = path.relative(APP_ROOT, view.path).replace(/^node_modules\/@|\.html$/g, '');
+        locals.dsViewPathResolved = path.relative(APP_ROOT, view.path).replace(/^node_modules\/@|\.html$/g, '');
         if (typeof res.expose === 'function') {
-            res.expose(locals.dsViewPathResloved, 'dsViewPathResloved');
+            res.expose(locals.dsViewPathResolved, 'dsViewPathResolved');
         }
         return renderView(view, layout, res.preRenderLocals(locals));
     });
