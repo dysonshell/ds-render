@@ -292,7 +292,8 @@ function augmentApp(app) {
             res.status(500);
         }
         res.locals.dsViewPath = DSC + 'errors/views/' + res.statusCode;
-        console.log(err.stack);
+        err.message = '! on url: ' + req.originalUrl.replace(/\?.*$/, '') + ' - ' + err.message;
+        console[err.statusCode >= 500 ? 'error' : 'info'](err.stack);
         return findViewPath(res).then(function (viewPath) {
             // 重试显示自定义错误页面
             res.render();
