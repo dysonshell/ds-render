@@ -16,7 +16,7 @@ tape('partial/a with layout', function (test) {
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), '<!DOCTYPE html><!-- comments kept --><title>partial a</title><!DOCTYPE html> <span>partial a</span>');
+            test.equal(res.text.trim(), '<!DOCTYPE html><!-- comments kept --><title>partial a1</title><!DOCTYPE html> 1 <span>partial a1</span>1');
         });
 });
 
@@ -27,7 +27,7 @@ tape('partial/a with layout on /global/lb' , function (test) {
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), '<!DOCTYPE html><!-- hello from b --><!DOCTYPE html> <span>partial a</span>');
+            test.equal(res.text.trim(), '<!DOCTYPE html>1<!-- hello from b --><!DOCTYPE html> 1 <span>partial a1</span>');
         });
 });
 
@@ -38,6 +38,6 @@ tape('partial/a without layout on /global/lc' , function (test) {
         .expect(200)
         .end(function (err, res) {
             test.notOk(err);
-            test.equal(res.text.trim(), '<!DOCTYPE html> <span>partial a</span>');
+            test.equal(res.text.trim(), '<!DOCTYPE html> 1 <span>partial a1</span>');
         });
 });

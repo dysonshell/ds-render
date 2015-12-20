@@ -293,7 +293,7 @@ function augmentApp(app) {
         }
         res.locals.dsViewPath = DSC + 'errors/views/' + res.statusCode;
         err.message = '! on url: ' + req.originalUrl.replace(/\?.*$/, '') + ' - ' + err.message;
-        console[err.statusCode >= 500 ? 'error' : 'info'](err.stack);
+        console[err.statusCode >= 500 ? 'error' : 'info'](err.message.match(/_NOT_FOUND$/) ? err.message : err.stack);
         return findViewPath(res).then(function (viewPath) {
             // 重试显示自定义错误页面
             res.render();
