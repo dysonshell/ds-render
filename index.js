@@ -96,7 +96,14 @@ function preRenderView(view) {
     return Promise.props({
         template: getParsedTemplate(view.path),
         partials: getParsedPartials(view.path)
-    }).then(_.assign.bind(null, view));
+    }).then(function (obj) {
+        _.assign(view, obj);
+        view.component = Ractive.extend({
+            template: view.template,
+            partials: view.partials,
+        });
+        return view;
+    });
 }
 
 var renderView = exports.renderView = co.wrap(function *(view, layout, data) {
@@ -109,13 +116,7 @@ var renderView = exports.renderView = co.wrap(function *(view, layout, data) {
             partials: view.partials,
             template: view.template,
             components: {
-                dsBody: Ractive.extend({ // TODO: stress, cache
-                    partials: layout.partials,
-                    template: layout.template,
-                    data: function () {
-                        return data;
-                    },
-                }),
+                dsBody: layout.component,
             },
             data: data,
         });
@@ -291,6 +292,7 @@ function augmentApp(app) {
             res.status(500);
         }
         res.locals.dsViewPath = DSC + 'errors/views/' + res.statusCode;
+        console.log(err.stack);
         return findViewPath(res).then(function (viewPath) {
             // 重试显示自定义错误页面
             res.render();
