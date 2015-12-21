@@ -36,5 +36,10 @@ router.get('/lc', function (req, res) {
     res.locals.dsLayoutPath = false;
     res.render('la');
 });
+router.get('/ld', function (req, res) {
+    req.routerFactoryModule = module;
+    res.locals.a = 1;
+    res.render();
+});
 
 module.exports = router;

@@ -83,7 +83,7 @@ function getParsedTemplate(filePath) {
 
 exports.preRenderView = preRenderView;
 
-function preRenderView(view) {
+function preRenderView(cache, view) {
     if (!view.path) {
         return Promise.reject(errs.create({
             message: 'VIEW_NOT_FOUND',
@@ -106,11 +106,14 @@ function preRenderView(view) {
     });
 }
 
-var renderView = exports.renderView = co.wrap(function *(view, layout, data) {
-    view = yield preRenderView(view);
-    data = yield Promise.props(yield Promise.resolve(data || {}));
-    // data 可以整个是 promise，也可以其中某些属性是 promise
+function getRactive(cache, view, layout) {
     var ractive;
+    var cacheKey = view.path + '|' + (layout && layout.path ? layout.path : '');
+
+    if (cache && (ractive = cache[cacheKey])) {
+        return ractive;
+    }
+
     if (layout) {
         ractive = new Ractive({
             partials: view.partials,
@@ -118,17 +121,45 @@ var renderView = exports.renderView = co.wrap(function *(view, layout, data) {
             components: {
                 dsBody: layout.component,
             },
-            data: data,
         });
     } else {
         ractive = new Ractive({
             partials: view.partials,
             template: view.template,
-            data: data,
         });
     }
+
+    if (cache) {
+        cache[cacheKey] = ractive;
+    }
+
+    return ractive;
+}
+
+var getView = exports.getView = co.wrap(function *(cache, viewPath) {
+    if (cache && (view = cache[viewPath])) {
+        return view;
+    }
+    var view = {
+        path: viewPath
+    };
+    view = yield preRenderView(cache, view);
+    if (cache) {
+        cache[viewPath] = view;
+    }
+    return view;
+});
+
+var renderView = exports.renderView = co.wrap(function *(cache, view, layout, data) {
+    view = yield preRenderView(cache, view);
+    data = yield Promise.props(yield Promise.resolve(data || {}));
+    // data 可以整个是 promise，也可以其中某些属性是 promise
+    var ractive = getRactive(cache, view, layout);
+    ractive.reset(data);
     var html = ractive.toHTML();
-    yield ractive.teardown();
+    if (!cache) {
+        yield ractive.teardown();
+    }
     return html;
 });
 
@@ -139,6 +170,7 @@ function augmentApp(app) {
     var findPath = co.wrap(function *(notFoundMessage, res, viewPath) {
         var m = res.req.routerFactoryModule;
         // e.g. "/app/web/dsc/account/routes/page.js"
+        viewPath = (viewPath || '').replace(/\.html$/, '');
         var errobj = {
             viewPath: viewPath,
         };
@@ -170,7 +202,7 @@ function augmentApp(app) {
 
     var tryViewPath = findPath.bind(null, 'VIEW_NOT_FOUND');
     var findViewPath = co.wrap(function *(res, locals) {
-        var viewPath = yield res.preRenderViewLocals(locals);
+        var viewPath = yield res.preRenderViewPath(locals);
         var oe;
         return tryViewPath(res, viewPath)
             .catch(function (e) {
@@ -186,22 +218,7 @@ function augmentApp(app) {
     });
     var findLayoutPath = findPath.bind(null, 'LAYOUT_NOT_FOUND');
 
-    var getView = co.wrap(function *(viewPath) {
-        var cache = app.enabled('view cache') ? (app.cache || (app.cache = {})) : false;
-        if (cache && (view = cache[viewPath])) {
-            return view;
-        }
-        var view = {
-            path: viewPath
-        };
-        view = yield preRenderView(view);
-        if (cache) {
-            cache[viewPath] = cache[view.path] = view;
-        }
-        return view;
-    });
-
-    app.response.preRenderViewLocals = function (locals) {
+    app.response.preRenderViewPath = function (locals) {
         var res = this;
         var app = res.app;
         var req = res.req;
@@ -211,8 +228,7 @@ function augmentApp(app) {
             locals.dsViewPath ||
             res.locals.dsViewPath ||
             app.locals.dsViewPath ||
-            req.path.replace(/^\/|\/$/g, '')
-        ).then(function (vp) { return vp.replace(/\.html$/, ''); });
+            req.path.replace(/^\/|\/$/g, ''));
     };
 
     app.response.preRenderLocals = function (locals) {
@@ -224,6 +240,7 @@ function augmentApp(app) {
     };
 
     app.response.rendr = co.wrap(function *(vp, locals) {
+        var cache = app.enabled('view cache') ? (app.cache || (app.cache = {})) : false;
         var res = this;
         if (typeof vp === 'string') {
             locals = locals || {};
@@ -232,7 +249,7 @@ function augmentApp(app) {
             locals = vp || {};
         }
         var viewPath = yield findViewPath(res, locals);
-        var view = yield getView(viewPath);
+        var view = yield getView(cache, viewPath);
         var vt = view.template.t;
         var dsLayoutPath, layoutPath, layout;
         var fe = vt[0];
@@ -246,7 +263,7 @@ function augmentApp(app) {
             }
             if (dsLayoutPath) {
                 layoutPath = yield findLayoutPath(res, dsLayoutPath);
-                layout = yield getView(layoutPath);
+                layout = yield getView(cache, layoutPath);
             } else {
                 fe = vt.shift();
                 vt.splice.apply(vt, [0, 0].concat(fe.f || []));
@@ -256,7 +273,7 @@ function augmentApp(app) {
         if (typeof res.expose === 'function') {
             res.expose(locals.dsViewPathResolved, 'dsViewPathResolved');
         }
-        return renderView(view, layout, res.preRenderLocals(locals));
+        return renderView(cache, view, layout, res.preRenderLocals(locals));
     });
 
     app.response.render = function () {

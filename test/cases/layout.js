@@ -41,3 +41,15 @@ tape('partial/a without layout on /global/lc' , function (test) {
             test.equal(res.text.trim(), '<!DOCTYPE html> 1 <span>partial a1</span>');
         });
 });
+
+tape('partial/a with layout', function (test) {
+    test.plan(2);
+    request(app)
+        .get('/global/ld')
+        .expect(200)
+        .end(function (err, res) {
+            test.notOk(err);
+            test.equal(res.text.trim(), '<!DOCTYPE html><!-- comments kept --><title>partial a1</title><!DOCTYPE html> 1 - ccc/global/views/ld <span>partial a1</span>1');
+            console.log(res.text);
+        });
+});

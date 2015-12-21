@@ -9,47 +9,54 @@ require('ractive').DEBUG = false;
 
 console.log(process.env.NODE_CONFIG_DIR);
 var APP_ROOT = require('config').dsAppRoot;
-tape('parse', function (test) {
+
+var cache = {};
+
+tape('render', function (test) {
     test.plan(3);
     co(function *() {
         var viewPath = APP_ROOT + '/ccc/testc/views/ccc.html';
-        var partials = yield render.getParsedPartials(viewPath);
-        var template = yield render.getParsedTemplate(viewPath);
-        test.ok(partials.tc);
-        test.ok(partials['d/e']);
-        console.log('partials', partials);
-        test.ok(template);
-    }).catch(function (err) {
-        console.log(err);
-        test.ok(!err);
-    });
-});
+        var html = yield render.renderView(cache, (yield render.getView(cache, viewPath)), void 0, Promise.resolve({
+            lv: 'local variable',
+            pv: Promise.resolve('promised variable')
+        }));
 
-tape('render', function (test) {
-    test.plan(1);
-    co(function *() {
-        var viewPath = APP_ROOT + '/ccc/testc/views/ccc.html';
-        var html = yield render.renderView(false, (yield render.getView(false, viewPath)), void 0, Promise.resolve({
+        test.ok(cache[viewPath]);
+        test.ok(cache[viewPath+'|']);
+
+        // render again, should hit cache
+        var html = yield render.renderView(cache, (yield render.getView(cache, viewPath)), void 0, Promise.resolve({
             lv: 'local variable',
             pv: Promise.resolve('promised variable')
         }));
         console.log(html);
+        console.log(Object.keys(cache));
         test.equal(html, 'partial in testc<br>tc.d<br>local variable<br>promised variable');
     }).catch(function (err) {
-        console.log(err);
+        console.log(err.stack);
         test.ok(!err);
     });
 });
 
 tape('render with layout', function (test) {
-    test.plan(1);
+    test.plan(3);
     co(function *() {
         var viewPath = APP_ROOT + '/node_modules/@ccc/global/views/ld.html';
         var layoutPath = APP_ROOT + '/node_modules/@ccc/global/views/layouts/default.html';
-        var html = yield render.renderView(false, (yield render.getView(false, viewPath)), (yield render.getView(false, layoutPath)), Promise.resolve({
+        var html = yield render.renderView(cache, (yield render.getView(cache, viewPath)), (yield render.getView(cache, layoutPath)), Promise.resolve({
             a: 1,
         }));
         console.log(html);
+        console.log(Object.keys(cache));
+        test.ok(cache[viewPath]);
+        test.ok(cache[viewPath+'|'+layoutPath]);
+        var ck = Object.keys(cache);
+
+        var html = yield render.renderView(cache, (yield render.getView(cache, viewPath)), (yield render.getView(cache, layoutPath)), Promise.resolve({
+            a: 1,
+        }));
+        console.log(html);
+
         test.equal(html, '<!DOCTYPE html><!-- comments kept --><title>partial a1</title><!DOCTYPE html> 1 -  <span>partial a1</span>1');
     }).catch(function (err) {
         console.log(err);
