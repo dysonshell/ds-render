@@ -41,8 +41,8 @@ tape('render', function (test) {
 tape('render with layout', function (test) {
     test.plan(3);
     co(function *() {
-        var viewPath = APP_ROOT + '/node_modules/@ccc/global/views/ld.html';
-        var layoutPath = APP_ROOT + '/node_modules/@ccc/global/views/layouts/default.html';
+        var viewPath = APP_ROOT + '/ccc/global/views/ld.html';
+        var layoutPath = APP_ROOT + '/ccc/global/views/layouts/default.html';
         var html = yield render.renderView(cache, (yield render.getView(cache, viewPath)), (yield render.getView(cache, layoutPath)), Promise.resolve({
             a: 1,
         }));

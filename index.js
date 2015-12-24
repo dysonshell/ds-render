@@ -2,7 +2,7 @@
 var path = require('path');
 var fs = require('fs');
 var assert = require('assert');
-require('ds-nrequire');
+require('ds-require');
 var dsGlob = require('ds-glob');
 var config = require('config');
 var resolveFilename = require('module')._resolveFilename;
@@ -170,7 +170,7 @@ function augmentApp(app) {
     var findPath = co.wrap(function *(notFoundMessage, res, viewPath) {
         var m = res.req.routerFactoryModule;
         // e.g. "/app/web/dsc/account/routes/page.js"
-        viewPath = (viewPath || '').replace(/\.html$/, '');
+        viewPath = (viewPath || '').replace(/^\/+|\.html$|\/+$/g, '');
         var errobj = {
             viewPath: viewPath,
         };
