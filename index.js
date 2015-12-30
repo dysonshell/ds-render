@@ -155,7 +155,8 @@ var renderView = exports.renderView = co.wrap(function *(cache, view, layout, da
     data = yield Promise.props(yield Promise.resolve(data || {}));
     // data 可以整个是 promise，也可以其中某些属性是 promise
     var ractive = getRactive(cache, view, layout);
-    ractive.reset(data);
+    ractive.viewmodel.reset(data);
+    ractive.update();
     var html = ractive.toHTML();
     if (!cache) {
         yield ractive.teardown();
