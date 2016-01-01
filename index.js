@@ -3,17 +3,16 @@ var path = require('path');
 var fs = require('fs');
 var assert = require('assert');
 require('ds-require');
-var dsGlob = require('ds-glob');
 var config = require('config');
 var resolveFilename = require('module')._resolveFilename;
 var glob = require('glob');
 var unary = require('fn-unary');
-var co = require('co');
 var errto = require('errto');
 var errs = require('errs');
 var xtend = require('xtend');
 var Ractive = require('ractive');
 var Promise = require('bluebird');
+var resolveDeepProps = require('bluebird-deep-props');
 var _ = require('lodash');
 
 // config
@@ -51,11 +50,13 @@ function getComponentName(viewPath, isView) {
 
 exports.getParsedPartials = getParsedPartials;
 
+var globAsync = Promise.promisify(glob);
+
 function getParsedPartials(viewPath) {
     var componentName = getComponentName(viewPath, true);
     var prefix = DSC + componentName + '/partials/';
-    return co(function * () {
-        var files = (yield dsGlob.bind(null, DSC + '*/partials/**/*.html'));
+    return Promise.coroutine(function * () {
+        var files = yield globAsync(DSC + '*/partials/**/*.html', {cwd: APP_ROOT});
         var p = {};
         files.forEach(function (filename) {
             var partialName = filename.replace(htmlExtReg, '');
@@ -67,7 +68,7 @@ function getParsedPartials(viewPath) {
             }
         });
         return Promise.props(p);
-    });
+    })();
 }
 
 exports.getParsedTemplate = getParsedTemplate;
@@ -102,7 +103,7 @@ function preRenderView(cache, view) {
             template: view.template,
             partials: view.partials,
         });
-        return view;
+        return Promise.resolve(view);
     });
 }
 
@@ -136,7 +137,7 @@ function getRactive(cache, view, layout) {
     return ractive;
 }
 
-var getView = exports.getView = co.wrap(function *(cache, viewPath) {
+var getView = exports.getView = Promise.coroutine(function *(cache, viewPath) {
     if (cache && (view = cache[viewPath])) {
         return view;
     }
@@ -150,9 +151,10 @@ var getView = exports.getView = co.wrap(function *(cache, viewPath) {
     return view;
 });
 
-var renderView = exports.renderView = co.wrap(function *(cache, view, layout, data) {
+
+var renderView = exports.renderView = Promise.coroutine(function *(cache, view, layout, data) {
     view = yield preRenderView(cache, view);
-    data = yield Promise.props(yield Promise.resolve(data || {}));
+    data = yield resolveDeepProps(data || {});
     // data 可以整个是 promise，也可以其中某些属性是 promise
     var ractive = getRactive(cache, view, layout);
     ractive.viewmodel.reset(data);
@@ -168,7 +170,7 @@ exports.augmentApp = augmentApp;
 function augmentApp(app) {
     app.set('views', []);
 
-    var findPath = co.wrap(function *(notFoundMessage, res, viewPath) {
+    var findPath = Promise.coroutine(function *(notFoundMessage, res, viewPath) {
         var m = res.req.routerFactoryModule;
         // e.g. "/app/web/dsc/account/routes/page.js"
         viewPath = (viewPath || '').replace(/^\/+|\.html$|\/+$/g, '');
@@ -202,7 +204,7 @@ function augmentApp(app) {
     });
 
     var tryViewPath = findPath.bind(null, 'VIEW_NOT_FOUND');
-    var findViewPath = co.wrap(function *(res, locals) {
+    var findViewPath = Promise.coroutine(function *(res, locals) {
         var viewPath = yield res.preRenderViewPath(locals);
         var oe;
         return tryViewPath(res, viewPath)
@@ -232,15 +234,15 @@ function augmentApp(app) {
             req.path.replace(/^\/|\/$/g, ''));
     };
 
-    app.response.preRenderLocals = function (locals) {
+    app.response.mergeLocals = function (locals) {
         var res = this;
         var app = res.app;
         locals = locals || {};
 
-        return Promise.props(_.assign({}, app.locals, res.locals, locals));
+        return _.assign({}, app.locals, res.locals, locals);
     };
 
-    app.response.rendr = co.wrap(function *(vp, locals) {
+    app.response.rendr = Promise.coroutine(function *(vp, locals) {
         var cache = app.enabled('view cache') ? (app.cache || (app.cache = {})) : false;
         var res = this;
         if (typeof vp === 'string') {
@@ -274,7 +276,7 @@ function augmentApp(app) {
         if (typeof res.expose === 'function') {
             res.expose(locals.dsViewPathResolved, 'dsViewPathResolved');
         }
-        return renderView(cache, view, layout, res.preRenderLocals(locals));
+        return renderView(cache, view, layout, res.mergeLocals(locals));
     });
 
     app.response.render = function () {
