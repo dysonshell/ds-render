@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "bluebird": "^3",
-    "bluebird-deep-props": "^1.0.0",
+    "bluebird-deep-props": "^1.0.1",
     "config": "^1",
     "ds-glob": "^1.0.3",
     "ds-require": "^1.0.1",
