@@ -154,6 +154,11 @@ var getView = exports.getView = Promise.coroutine(function *(cache, viewPath) {
 
 var renderView = exports.renderView = Promise.coroutine(function *(cache, view, layout, data) {
     view = yield preRenderView(cache, view);
+    if (data.state &&
+            typeof data.state.toString === 'function' &&
+            data.state.toString.toString().indexOf('[native code]' === -1)) {
+        data.state = data.state.toString(); // for express-state
+    }
     data = yield resolveDeepProps(data || {});
     // data 可以整个是 promise，也可以其中某些属性是 promise
     var ractive = getRactive(cache, view, layout);
