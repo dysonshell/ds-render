@@ -311,10 +311,10 @@ function augmentApp(app) {
     app.use(function (err, req, res, next) {
         // 处理所有接到的 err，要用 app.use 才行（否则只能接到同一 router 的 err）
         if (typeof err.statusCode === 'number') {
-            res.status(err.statusCode);
+            res.statusCode = err.statusCode;
         }
         if (typeof res.statusCode !== 'number' || res.statusCode < 400) {
-            res.status(500);
+            res.statusCode = 500;
         }
         res.locals.dsViewPath = DSC + 'errors/views/' + res.statusCode;
         err.message = '! on url: ' + req.originalUrl.replace(/\?.*$/, '') + ' - ' + err.message;
@@ -322,6 +322,7 @@ function augmentApp(app) {
         return findViewPath(res).then(function (viewPath) {
             // 重试显示自定义错误页面
             res.render();
-        }).catch(next);
+            return null;
+        }).catch(next.bind(null, err));
     });
 }
