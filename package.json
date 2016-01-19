@@ -1,6 +1,6 @@
 {
   "name": "ds-render",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "description": "render module for dysonshell",
   "main": "index.js",
   "files": [
